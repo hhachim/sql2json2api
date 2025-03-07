@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.ExitCodeGenerator;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import com.etljobs.sql2json2api.model.SqlFile;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Component
 @Slf4j
+@Profile("sql-file-demo")
 public class SqlFileRunner implements CommandLineRunner, ExitCodeGenerator {
     
     private final SqlFileService sqlFileService;
