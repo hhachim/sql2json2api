@@ -47,7 +47,7 @@ class SqlExecutionServiceTest {
     void testExecuteQuery_ThrowsException() {
         // Arrange
         String sql = "SELECT * FROM nonexistent_table";
-        when(jdbcTemplate.queryForList(sql)).thenThrow(new DataAccessException("Database error") {});
+        when(jdbcTemplate.queryForList(sql)).thenThrow(new TestDataAccessException("Database error"));
         
         // Act & Assert
         assertThrows(SqlExecutionException.class, () -> sqlExecutionService.executeQuery(sql));
@@ -86,7 +86,7 @@ class SqlExecutionServiceTest {
     void testExecuteCountQuery_ThrowsException() {
         // Arrange
         String sql = "SELECT COUNT(*) FROM nonexistent_table";
-        when(jdbcTemplate.queryForObject(sql, Integer.class)).thenThrow(new DataAccessException("Database error") {});
+        when(jdbcTemplate.queryForObject(sql, Integer.class)).thenThrow(new TestDataAccessException("Database error"));
         
         // Act & Assert
         assertThrows(SqlExecutionException.class, () -> sqlExecutionService.executeCountQuery(sql));
@@ -110,5 +110,14 @@ class SqlExecutionServiceTest {
         results.add(row2);
         
         return results;
+    }
+    
+    // Une classe concrète qui étend DataAccessException pour les tests
+    private static class TestDataAccessException extends DataAccessException {
+        private static final long serialVersionUID = 1L;
+        
+        public TestDataAccessException(String msg) {
+            super(msg);
+        }
     }
 }

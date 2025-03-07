@@ -24,6 +24,12 @@ app:
   batch:
     size: 10
     delay: 500
+api:
+  auth:
+    url: https://api.example.com/auth/token
+    username: api_user
+    password: api_password
+    token-ttl: 3600
 
 logging:
   level:
