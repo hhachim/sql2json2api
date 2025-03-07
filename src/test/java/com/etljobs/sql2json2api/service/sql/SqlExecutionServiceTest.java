@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -86,10 +87,18 @@ class SqlExecutionServiceTest {
     void testExecuteCountQuery_ThrowsException() {
         // Arrange
         String sql = "SELECT COUNT(*) FROM nonexistent_table";
-        when(jdbcTemplate.queryForObject(sql, Integer.class)).thenThrow(new TestDataAccessException("Database error"));
+        when(jdbcTemplate.queryForObject(sql, Integer.class))
+            .thenThrow(new TestDataAccessException("Database error"));
         
         // Act & Assert
-        assertThrows(SqlExecutionException.class, () -> sqlExecutionService.executeCountQuery(sql));
+        SqlExecutionException exception = assertThrows(SqlExecutionException.class, () -> {
+            sqlExecutionService.executeCountQuery(sql);
+        });
+        
+        // Vérifier que l'exception contient la cause racine
+        assertNotNull(exception.getCause());
+        assertEquals("Database error", exception.getCause().getMessage());
+        
         verify(jdbcTemplate).queryForObject(sql, Integer.class);
     }
     

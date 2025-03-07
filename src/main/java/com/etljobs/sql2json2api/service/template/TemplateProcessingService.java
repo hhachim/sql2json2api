@@ -1,11 +1,12 @@
 package com.etljobs.sql2json2api.service.template;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
@@ -34,6 +35,9 @@ public class TemplateProcessingService {
     
     private final Configuration freemarkerConfig;
     private final TemplateMetadataService metadataService;
+    
+    // Pattern pour trouver les placeholders dans la route
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{result\\.(\\w+)\\}");
     
     public TemplateProcessingService(Configuration freemarkerConfig, TemplateMetadataService metadataService) {
         this.freemarkerConfig = freemarkerConfig;
@@ -79,7 +83,8 @@ public class TemplateProcessingService {
             dataModel.put("result", rowData); // Single row data
             
             // Process template to generate JSON
-            Template template = new Template(templateName, new StringReader(templateContent), freemarkerConfig);
+            // Utiliser getTemplate() au lieu de créer un nouvel objet Template
+            Template template = freemarkerConfig.getTemplate(templateName);
             StringWriter writer = new StringWriter();
             template.process(dataModel, writer);
             String jsonPayload = writer.toString();
@@ -102,17 +107,21 @@ public class TemplateProcessingService {
      * @return The processed route with placeholders replaced by actual values
      */
     private String processRoutePlaceholders(String route, Map<String, Object> rowData) {
-        String processedRoute = route;
-        
-        // Simple placeholder processing
-        for (Map.Entry<String, Object> entry : rowData.entrySet()) {
-            String placeholder = "${result." + entry.getKey() + "}";
-            if (processedRoute.contains(placeholder)) {
-                processedRoute = processedRoute.replace(placeholder, 
-                        entry.getValue() != null ? entry.getValue().toString() : "");
-            }
+        if (route == null) {
+            return "";
         }
         
-        return processedRoute;
+        StringBuffer result = new StringBuffer();
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(route);
+        
+        while (matcher.find()) {
+            String fieldName = matcher.group(1);
+            Object value = rowData.get(fieldName);
+            String replacement = (value != null) ? value.toString() : "";
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        
+        matcher.appendTail(result);
+        return result.toString();
     }
 }
