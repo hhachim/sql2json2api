@@ -32,12 +32,7 @@ api:
     token-ttl: 3600
     # Template JSON pour le payload d'authentification
     # Peut contenir des placeholders: ${username}, ${password} pour les informations d'authentification
-    payload-template: >
-      {
-        "username": "${username}",
-        "password": "${password}",
-        "context": "api"
-      }
+    payload-template: "{\"username\": \"$${username}\", \"password\": \"$${password}\", \"context\": \"api\"}"
 
 logging:
   level:

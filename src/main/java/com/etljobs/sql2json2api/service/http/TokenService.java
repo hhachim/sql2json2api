@@ -7,6 +7,8 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -45,6 +47,8 @@ public class TokenService {
     
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    @Autowired
+    @Qualifier("freemarkerConfiguration")  // Si nécessaire pour distinguer entre plusieurs configurations
     private final Configuration freemarkerConfiguration;
     
     private String cachedToken;
