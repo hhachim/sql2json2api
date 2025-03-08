@@ -54,7 +54,7 @@ public class ApiResponseFactory {
             apiResponse.setRequestUrl(request.getUrl());
         }
         
-        apiResponse.setAttemptNumber(attemptNumber);
+        apiResponse.setAttemptNumber((int)attemptNumber);
         return apiResponse;
     }
     
@@ -92,7 +92,7 @@ public class ApiResponseFactory {
             apiResponse.setRequestUrl(request.getUrl());
         }
         
-        apiResponse.setAttemptNumber(attemptNumber);
+        apiResponse.setAttemptNumber((int)attemptNumber);
         return apiResponse;
     }
     
