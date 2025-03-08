@@ -10,26 +10,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.Mock;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.MockitoAnnotations;
-import org.springframework.http.HttpMethod;
 
-import com.etljobs.sql2json2api.model.ApiEndpointInfo;
 import com.etljobs.sql2json2api.model.ApiResponse;
-import com.etljobs.sql2json2api.model.ApiTemplateResult;
 import com.etljobs.sql2json2api.model.SqlFile;
-import com.etljobs.sql2json2api.service.http.ApiClientService;
 import com.etljobs.sql2json2api.service.http.TokenService;
 import com.etljobs.sql2json2api.service.sql.SqlExecutionService;
 import com.etljobs.sql2json2api.service.sql.SqlFileService;
-import com.etljobs.sql2json2api.service.template.TemplateProcessingService;
 
 class ProcessOrchestratorTest {
 
@@ -40,19 +34,16 @@ class ProcessOrchestratorTest {
     private SqlExecutionService sqlExecutionService;
 
     @Mock
-    private TemplateProcessingService templateService;
-
-    @Mock
     private TokenService tokenService;
-
-    @Mock
-    private ApiClientService apiClientService;
     
     @Mock
     private RetryStrategyFactory retryStrategyFactory;
     
     @Mock
     private RetryStrategy retryStrategy;
+    
+    @Mock
+    private RowProcessor rowProcessor;
 
     private ProcessOrchestrator orchestrator;
 
@@ -63,15 +54,13 @@ class ProcessOrchestratorTest {
         // Configuration du RetryStrategyFactory mock
         when(retryStrategyFactory.create()).thenReturn(retryStrategy);
         when(retryStrategy.getMaxAttempts()).thenReturn(3);
-        when(retryStrategy.createContext()).thenReturn(RetryStrategy.RetryContext.builder().currentAttempt(1).build());
         
         orchestrator = new ProcessOrchestrator(
                 sqlFileService,
                 sqlExecutionService,
-                templateService,
                 tokenService,
-                apiClientService,
-                retryStrategyFactory
+                retryStrategyFactory,
+                rowProcessor
         );
     }
 
@@ -96,18 +85,6 @@ class ProcessOrchestratorTest {
         row.put("username", "testuser");
         results.add(row);
 
-        // Préparer le résultat du template et les infos d'endpoint
-        ApiEndpointInfo endpointInfo = new ApiEndpointInfo();
-        endpointInfo.setRoute("/api/users/1");
-        endpointInfo.setMethod(HttpMethod.GET);
-        endpointInfo.setHeaders(Map.of("Content-Type", "application/json"));
-
-        String jsonPayload = "{\"user\":{\"id\":1,\"username\":\"testuser\"}}";
-        ApiTemplateResult templateResult = new ApiTemplateResult(
-                jsonPayload,
-                endpointInfo
-        );
-
         // Préparer la réponse API
         ApiResponse apiResponse = ApiResponse
                 .builder()
@@ -119,19 +96,18 @@ class ProcessOrchestratorTest {
         when(sqlExecutionService.executeQuery(sqlFile.getContent()))
                 .thenReturn(results);
         when(tokenService.getToken()).thenReturn("Bearer token123");
-        when(templateService.processTemplate(sqlFile.getTemplateName(), row))
-                .thenReturn(templateResult);
-
-        // Créer un spy de l'orchestrateur pour mocker la méthode processRow
-        ProcessOrchestrator spyOrchestrator = spy(orchestrator);
-
-        // Mocker la méthode processRow pour qu'elle retourne notre réponse attendue
-        doReturn(apiResponse)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
+        
+        // Configurer le RowProcessor mock
+        when(rowProcessor.processRow(
+                eq(sqlFile), 
+                eq(row), 
+                eq(0), 
+                anyString(), 
+                eq(retryStrategy), 
+                any())).thenReturn(apiResponse);
 
         // Act
-        List<ApiResponse> response = spyOrchestrator.processSqlFile(sqlFileName);
+        List<ApiResponse> response = orchestrator.processSqlFile(sqlFileName);
 
         // Assert
         assertNotNull(response);
@@ -139,8 +115,13 @@ class ProcessOrchestratorTest {
         assertEquals(apiResponse, response.get(0));
 
         // Vérifier que processRow a été appelé avec les bons arguments
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
+        verify(rowProcessor).processRow(
+                eq(sqlFile), 
+                eq(row), 
+                eq(0), 
+                anyString(), 
+                eq(retryStrategy), 
+                any());
     }
 
     @Test
@@ -195,30 +176,27 @@ class ProcessOrchestratorTest {
                 .body("{\"id\":3,\"status\":\"success\"}")
                 .build();
 
-        // Configurer les mocks de base
+        // Configurer les mocks
         when(sqlFileService.readSqlFile(sqlFileName)).thenReturn(sqlFile);
         when(sqlExecutionService.executeQuery(sqlFile.getContent()))
                 .thenReturn(results);
         when(tokenService.getToken()).thenReturn("Bearer token123");
 
-        // Créer un spy de l'orchestrateur
-        ProcessOrchestrator spyOrchestrator = spy(orchestrator);
-
-        // Mocker la méthode processRow pour les différentes lignes
-        doReturn(apiResponse1)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row1), eq(0), anyString(), any());
-
-        doReturn(apiResponse2)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row2), eq(1), anyString(), any());
-
-        doReturn(apiResponse3)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row3), eq(2), anyString(), any());
+        // Configurer le RowProcessor pour chaque ligne
+        when(rowProcessor.processRow(
+                eq(sqlFile), eq(row1), eq(0), anyString(), eq(retryStrategy), any()))
+                .thenReturn(apiResponse1);
+        
+        when(rowProcessor.processRow(
+                eq(sqlFile), eq(row2), eq(1), anyString(), eq(retryStrategy), any()))
+                .thenReturn(apiResponse2);
+        
+        when(rowProcessor.processRow(
+                eq(sqlFile), eq(row3), eq(2), anyString(), eq(retryStrategy), any()))
+                .thenReturn(apiResponse3);
 
         // Act
-        List<ApiResponse> responses = spyOrchestrator.processSqlFile(sqlFileName);
+        List<ApiResponse> responses = orchestrator.processSqlFile(sqlFileName);
 
         // Assert
         assertNotNull(responses);
@@ -228,12 +206,8 @@ class ProcessOrchestratorTest {
         assertEquals(apiResponse3, responses.get(2));
 
         // Vérifier que processRow a été appelé pour chaque ligne
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row1), eq(0), anyString(), any());
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row2), eq(1), anyString(), any());
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row3), eq(2), anyString(), any());
+        verify(rowProcessor, times(3)).processRow(
+                eq(sqlFile), any(), anyInt(), anyString(), eq(retryStrategy), any());
     }
 
     @Test
@@ -269,12 +243,9 @@ class ProcessOrchestratorTest {
         // Vérifier que le token n'est pas généré
         verify(tokenService, times(0)).getToken();
 
-        // Vérifier qu'aucun template n'est traité
-        verify(templateService, times(0)).processTemplate(any(), any());
-
-        // Vérifier qu'aucun appel API n'est effectué
-        verify(apiClientService, times(0))
-                .callApi(any(), any(), any(), any(), any());
+        // Vérifier qu'aucun traitement de ligne n'est effectué
+        verify(rowProcessor, times(0)).processRow(
+                any(), any(), anyInt(), anyString(), any(), any());
     }
 
     @Test
@@ -323,31 +294,28 @@ class ProcessOrchestratorTest {
                 .body("{\"id\":3,\"status\":\"success\"}")
                 .build();
 
-        // Configurer les mocks de base
+        // Configurer les mocks
         when(sqlFileService.readSqlFile(sqlFileName)).thenReturn(sqlFile);
         when(sqlExecutionService.executeQuery(sqlFile.getContent()))
                 .thenReturn(results);
         when(tokenService.getToken()).thenReturn("Bearer token123");
-
-        // Créer un spy de l'orchestrateur
-        ProcessOrchestrator spyOrchestrator = spy(orchestrator);
-
-        // Mocker la méthode processRow pour les différentes lignes
-        doReturn(apiResponse1)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row1), eq(0), anyString(), any());
-
-        // La deuxième ligne retourne null (simulant le cas où aucune réponse n'est ajoutée)
-        doReturn(null)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row2), eq(1), anyString(), any());
-
-        doReturn(apiResponse3)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row3), eq(2), anyString(), any());
+        
+        // Configurer le RowProcessor pour simuler un succès, null (erreur) et succès
+        when(rowProcessor.processRow(
+                eq(sqlFile), eq(row1), eq(0), anyString(), eq(retryStrategy), any()))
+                .thenReturn(apiResponse1);
+        
+        // La deuxième ligne retourne null (simulant une erreur)
+        when(rowProcessor.processRow(
+                eq(sqlFile), eq(row2), eq(1), anyString(), eq(retryStrategy), any()))
+                .thenReturn(null);
+        
+        when(rowProcessor.processRow(
+                eq(sqlFile), eq(row3), eq(2), anyString(), eq(retryStrategy), any()))
+                .thenReturn(apiResponse3);
 
         // Act
-        List<ApiResponse> responses = spyOrchestrator.processSqlFile(sqlFileName);
+        List<ApiResponse> responses = orchestrator.processSqlFile(sqlFileName);
 
         // Assert
         assertNotNull(responses);
@@ -356,11 +324,11 @@ class ProcessOrchestratorTest {
         assertEquals(apiResponse3, responses.get(1));
 
         // Vérifier que processRow a été appelé pour chaque ligne
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row1), eq(0), anyString(), any());
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row2), eq(1), anyString(), any());
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row3), eq(2), anyString(), any());
+        verify(rowProcessor).processRow(
+                eq(sqlFile), eq(row1), eq(0), anyString(), eq(retryStrategy), any());
+        verify(rowProcessor).processRow(
+                eq(sqlFile), eq(row2), eq(1), anyString(), eq(retryStrategy), any());
+        verify(rowProcessor).processRow(
+                eq(sqlFile), eq(row3), eq(2), anyString(), eq(retryStrategy), any());
     }
 }
