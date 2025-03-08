@@ -30,9 +30,8 @@ api:
     username: admin_api
     password: gnDLta18o53x+4+/+MH/R/jX06V
     token-ttl: 3600
-    # Template JSON pour le payload d'authentification
-    # Peut contenir des placeholders: ${username}, ${password} pour les informations d'authentification
-    payload-template: "{\"username\": \"$${username}\", \"password\": \"$${password}\", \"context\": \"api\"}"
+    # Chemin vers le template d'authentification
+    payload-template-path: auth/auth-payload.ftlh
 
 logging:
   level:

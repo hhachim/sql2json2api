@@ -1,6 +1,5 @@
 package com.etljobs.sql2json2api.service.http;
 
-import java.io.StringReader;
 import java.io.StringWriter;
 import java.time.Duration;
 import java.time.Instant;
@@ -42,19 +41,19 @@ public class TokenService {
     @Value("${api.auth.token-ttl:3600}")
     private long tokenTtlSeconds;
     
-    @Value("${api.auth.payload-template:{\"username\":\"${username}\",\"password\":\"${password}\"}}")
-    private String payloadTemplate;
+    @Value("${api.auth.payload-template-path:auth/auth-payload.ftlh}")
+    private String payloadTemplatePath;
     
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    @Autowired
-    @Qualifier("freemarkerConfiguration")  // Si nécessaire pour distinguer entre plusieurs configurations
     private final Configuration freemarkerConfiguration;
     
     private String cachedToken;
     private Instant tokenExpiration;
     
-    public TokenService(RestTemplate restTemplate, ObjectMapper objectMapper, Configuration freemarkerConfiguration) {
+    @Autowired
+    public TokenService(RestTemplate restTemplate, ObjectMapper objectMapper, 
+                       @Qualifier("freemarkerConfiguration") Configuration freemarkerConfiguration) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.freemarkerConfiguration = freemarkerConfiguration;
@@ -67,10 +66,8 @@ public class TokenService {
      * @throws Exception Si une erreur survient lors du traitement du template
      */
     protected String generatePayload() throws Exception {
-        // Créer un template Freemarker à partir de la chaîne de caractères
-        Template template = new Template("authPayloadTemplate", 
-                new StringReader(payloadTemplate), 
-                freemarkerConfiguration);
+        // Charger le template depuis le chemin configuré
+        Template template = freemarkerConfiguration.getTemplate(payloadTemplatePath);
         
         // Préparer le modèle de données pour Freemarker
         Map<String, Object> dataModel = new HashMap<>();
