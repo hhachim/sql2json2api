@@ -238,7 +238,7 @@ class ApiCallExecutorTest {
                 .build();
         
         // Uniquement le minimum de mocks nécessaires
-        when(defaultStrategy.shouldRetry(any())).thenReturn(false);
+        //when(defaultStrategy.shouldRetry(any())).thenReturn(false);
         when(tokenService.getToken()).thenReturn("Bearer token");
         when(restTemplate.exchange(
                 anyString(), any(HttpMethod.class), any(HttpEntity.class), eq(String.class)))
