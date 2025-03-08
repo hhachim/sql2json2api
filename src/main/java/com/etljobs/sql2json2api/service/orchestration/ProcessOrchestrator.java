@@ -366,7 +366,7 @@ public class ProcessOrchestrator {
     /**
      * Traite une seule ligne avec un mécanisme de réessai simplifié.
      */
-    private ApiResponse processRow(SqlFile sqlFile, Map<String, Object> row, int rowIndex, 
+    protected ApiResponse processRow(SqlFile sqlFile, Map<String, Object> row, int rowIndex, 
         String rowIdentifier, List<RowError> rowErrors) {
         try {
         // Traiter le template

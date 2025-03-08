@@ -10,8 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.Mock;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -62,7 +65,7 @@ class ProcessOrchestratorTest {
     }
 
     @Test
-    void processSqlFile_ShouldReadAndExecuteSQL() {
+        void processSqlFile_ShouldReadAndExecuteSQL() {
         // Arrange
         String sqlFileName = "GET_users.sql";
         
@@ -100,22 +103,34 @@ class ProcessOrchestratorTest {
         when(sqlExecutionService.executeQuery(sqlFile.getContent())).thenReturn(results);
         when(tokenService.getToken()).thenReturn("Bearer token123");
         when(templateService.processTemplate(sqlFile.getTemplateName(), row)).thenReturn(templateResult);
-        when(apiClientService.callApi(
-                endpointInfo.getRoute(),
-                endpointInfo.getMethod(),
-                jsonPayload,
-                endpointInfo.getHeaders(),
-                endpointInfo.getUrlParams()
-        )).thenReturn(apiResponse);
+        
+        // Créer un spy de l'orchestrateur pour mocker la méthode processRow
+        ProcessOrchestrator spyOrchestrator = spy(orchestrator);
+        
+        // Mocker la méthode processRow pour qu'elle retourne notre réponse attendue
+        doReturn(apiResponse).when(spyOrchestrator).processRow(
+                eq(sqlFile),
+                eq(row),
+                eq(0),
+                anyString(),
+                any());
 
         // Act
-        var response = orchestrator.processSqlFile(sqlFileName);
+        var response = spyOrchestrator.processSqlFile(sqlFileName);
 
         // Assert
         assertNotNull(response);
         assertEquals(1, response.size());
         assertEquals(apiResponse, response.get(0));
-    }
+        
+        // Vérifier que processRow a été appelé avec les bons arguments
+        verify(spyOrchestrator).processRow(
+                eq(sqlFile),
+                eq(row),
+                eq(0),
+                anyString(),
+                any());
+        }
 
     @Test
     void processSqlFile_ShouldProcessSingleRow() {

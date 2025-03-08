@@ -2,6 +2,7 @@
 
 ```bash
 mvn test -Dtest=TokenServiceTest
+mvn test -Dtest=ProcessOrchestratorTest#processSqlFile_ShouldReadAndExecuteSQL
 ```
 
 # Compiler sans les tests
