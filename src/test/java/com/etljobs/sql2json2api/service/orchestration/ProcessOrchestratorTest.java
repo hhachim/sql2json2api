@@ -20,7 +20,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpMethod;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.etljobs.sql2json2api.model.ApiEndpointInfo;
 import com.etljobs.sql2json2api.model.ApiResponse;
@@ -48,20 +47,32 @@ class ProcessOrchestratorTest {
 
     @Mock
     private ApiClientService apiClientService;
+    
+    @Mock
+    private RetryStrategyFactory retryStrategyFactory;
+    
+    @Mock
+    private RetryStrategy retryStrategy;
 
     private ProcessOrchestrator orchestrator;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        orchestrator
-                = new ProcessOrchestrator(
-                        sqlFileService,
-                        sqlExecutionService,
-                        templateService,
-                        tokenService,
-                        apiClientService
-                );
+        
+        // Configuration du RetryStrategyFactory mock
+        when(retryStrategyFactory.create()).thenReturn(retryStrategy);
+        when(retryStrategy.getMaxAttempts()).thenReturn(3);
+        when(retryStrategy.createContext()).thenReturn(RetryStrategy.RetryContext.builder().currentAttempt(1).build());
+        
+        orchestrator = new ProcessOrchestrator(
+                sqlFileService,
+                sqlExecutionService,
+                templateService,
+                tokenService,
+                apiClientService,
+                retryStrategyFactory
+        );
     }
 
     @Test
@@ -120,7 +131,7 @@ class ProcessOrchestratorTest {
                 .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
 
         // Act
-        var response = spyOrchestrator.processSqlFile(sqlFileName);
+        List<ApiResponse> response = spyOrchestrator.processSqlFile(sqlFileName);
 
         // Assert
         assertNotNull(response);
@@ -128,76 +139,6 @@ class ProcessOrchestratorTest {
         assertEquals(apiResponse, response.get(0));
 
         // Vérifier que processRow a été appelé avec les bons arguments
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
-    }
-
-    @Test
-    void processSqlFile_ShouldProcessSingleRow() {
-        // Arrange
-        String sqlFileName = "GET_users.sql";
-
-        // Créer un SqlFile de test
-        SqlFile sqlFile = SqlFile
-                .builder()
-                .fileName(sqlFileName)
-                .content("SELECT * FROM users")
-                .httpMethod("GET")
-                .baseName("users")
-                .templateName("GET_users.ftlh")
-                .build();
-
-        // Préparer une ligne de résultat SQL
-        List<Map<String, Object>> results = new ArrayList<>();
-        Map<String, Object> row = new HashMap<>();
-        row.put("id", 1);
-        row.put("username", "testuser");
-        results.add(row);
-
-        // Préparer le résultat du template et les infos d'endpoint
-        ApiEndpointInfo endpointInfo = new ApiEndpointInfo();
-        endpointInfo.setRoute("/api/users/1");
-        endpointInfo.setMethod(HttpMethod.GET);
-        endpointInfo.setHeaders(Map.of("Content-Type", "application/json"));
-
-        String jsonPayload = "{\"user\":{\"id\":1,\"username\":\"testuser\"}}";
-        ApiTemplateResult templateResult = new ApiTemplateResult(
-                jsonPayload,
-                endpointInfo
-        );
-
-        // Préparer la réponse API
-        ApiResponse apiResponse = ApiResponse
-                .builder()
-                .statusCode(200)
-                .body("{\"status\":\"success\"}")
-                .build();
-
-        // Configurer les mocks
-        when(sqlFileService.readSqlFile(sqlFileName)).thenReturn(sqlFile);
-        when(sqlExecutionService.executeQuery(sqlFile.getContent()))
-                .thenReturn(results);
-        when(tokenService.getToken()).thenReturn("Bearer token123");
-        when(templateService.processTemplate(sqlFile.getTemplateName(), row))
-                .thenReturn(templateResult);
-
-        // Créer un spy de l'orchestrateur
-        ProcessOrchestrator spyOrchestrator = spy(orchestrator);
-
-        // Mocker la méthode processRow pour qu'elle retourne notre réponse attendue
-        doReturn(apiResponse)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
-
-        // Act
-        List<ApiResponse> responses = spyOrchestrator.processSqlFile(sqlFileName);
-
-        // Assert
-        assertNotNull(responses);
-        assertEquals(1, responses.size());
-        assertEquals(apiResponse, responses.get(0));
-
-        // Vérifier les appels
         verify(spyOrchestrator)
                 .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
     }
@@ -421,64 +362,5 @@ class ProcessOrchestratorTest {
                 .processRow(eq(sqlFile), eq(row2), eq(1), anyString(), any());
         verify(spyOrchestrator)
                 .processRow(eq(sqlFile), eq(row3), eq(2), anyString(), any());
-    }
-
-    @Test
-    void processSqlFile_ShouldImplementRetryStrategy() {
-        // Arrange
-        String sqlFileName = "GET_users_with_retry.sql";
-
-        // Créer un SqlFile de test
-        SqlFile sqlFile = SqlFile
-                .builder()
-                .fileName(sqlFileName)
-                .content("SELECT * FROM users")
-                .httpMethod("GET")
-                .baseName("users_with_retry")
-                .templateName("GET_users.ftlh")
-                .build();
-
-        // Une seule ligne de résultat
-        List<Map<String, Object>> results = new ArrayList<>();
-        Map<String, Object> row = new HashMap<>();
-        row.put("id", 1);
-        row.put("username", "testuser");
-        results.add(row);
-
-        // Configurer les mocks de base
-        when(sqlFileService.readSqlFile(sqlFileName)).thenReturn(sqlFile);
-        when(sqlExecutionService.executeQuery(sqlFile.getContent()))
-                .thenReturn(results);
-        when(tokenService.getToken()).thenReturn("Bearer test-token");
-
-        // La méthode processRow simulera une reconnexion réussie
-        ApiResponse successResponse = ApiResponse
-                .builder()
-                .statusCode(200)
-                .body("{\"success\":true}")
-                .build();
-
-        // Créer un spy de l'orchestrateur
-        ProcessOrchestrator spyOrchestrator = spy(orchestrator);
-
-        // Mocker la méthode processRow pour qu'elle retourne notre réponse de succès
-        doReturn(successResponse)
-                .when(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
-
-        // Configurer le délai de réessai à 1ms pour le test
-        ReflectionTestUtils.setField(spyOrchestrator, "retryDelayMs", 1L);
-
-        // Act
-        List<ApiResponse> responses = spyOrchestrator.processSqlFile(sqlFileName);
-
-        // Assert
-        assertNotNull(responses);
-        assertEquals(1, responses.size());
-        assertEquals(successResponse, responses.get(0));
-
-        // Vérifier que processRow a été appelé
-        verify(spyOrchestrator)
-                .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
     }
 }
