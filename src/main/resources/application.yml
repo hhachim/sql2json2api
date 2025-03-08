@@ -24,6 +24,10 @@ app:
   batch:
     size: 10
     delay: 500
+  retry:
+    max-attempts: 3        # Nombre maximum de tentatives
+    delay-ms: 2000         # Délai initial entre les tentatives (ms)
+    backoff-multiplier: 1.5 # Multiplicateur pour le délai entre les tentatives
 api:
   auth:
     url: https://api.example.com/auth/token
