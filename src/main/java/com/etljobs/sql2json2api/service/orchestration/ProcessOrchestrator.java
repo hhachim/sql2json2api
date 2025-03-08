@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import com.etljobs.sql2json2api.exception.ProcessingException;
 import com.etljobs.sql2json2api.model.ApiResponse;
+import com.etljobs.sql2json2api.model.ApiTemplateResult;
 import com.etljobs.sql2json2api.model.SqlFile;
 import com.etljobs.sql2json2api.service.http.ApiClientService;
 import com.etljobs.sql2json2api.service.http.TokenService;
@@ -61,9 +62,36 @@ public class ProcessOrchestrator {
             List<Map<String, Object>> results = sqlExecutionService.executeQuery(sqlFile.getContent());
             log.info("Requête SQL exécutée avec succès, {} résultats obtenus", results.size());
             
-            // Pour cette première étape, nous retournons simplement une liste vide
-            // Les étapes suivantes enrichiront cette méthode
-            return new ArrayList<>();
+            // 3. Préparer la liste pour stocker les réponses
+            List<ApiResponse> responses = new ArrayList<>();
+            
+            // 4. Traiter uniquement la première ligne pour cette étape
+            if (!results.isEmpty()) {
+                // 4.1 Obtenir le token d'authentification (une seule fois)
+                String token = tokenService.getToken();
+                
+                // 4.2 Traiter la première ligne
+                Map<String, Object> firstRow = results.get(0);
+                ApiTemplateResult templateResult = templateService.processTemplate(
+                        sqlFile.getTemplateName(), firstRow);
+                
+                log.debug("Template traité pour la première ligne");
+                
+                // 4.3 Effectuer l'appel API avec les informations extraites
+                ApiResponse response = apiClientService.callApi(
+                        templateResult.getEndpointInfo().getRoute(),
+                        templateResult.getEndpointInfo().getMethod(),
+                        templateResult.getJsonPayload(),
+                        templateResult.getEndpointInfo().getHeaders(),
+                        templateResult.getEndpointInfo().getUrlParams());
+                
+                log.info("Appel API effectué pour la première ligne, statut: {}", response.getStatusCode());
+                
+                // 4.4 Ajouter la réponse à la liste
+                responses.add(response);
+            }
+            
+            return responses;
             
         } catch (Exception e) {
             log.error("Erreur lors du traitement du fichier SQL: {}", sqlFileName, e);
