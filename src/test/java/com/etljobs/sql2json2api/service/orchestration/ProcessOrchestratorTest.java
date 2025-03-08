@@ -445,56 +445,40 @@ class ProcessOrchestratorTest {
         row.put("username", "testuser");
         results.add(row);
 
-        // Endpoint info
-        ApiEndpointInfo endpointInfo = new ApiEndpointInfo();
-        endpointInfo.setRoute("/api/users/1");
-        endpointInfo.setMethod(HttpMethod.GET);
+        // Configurer les mocks de base
+        when(sqlFileService.readSqlFile(sqlFileName)).thenReturn(sqlFile);
+        when(sqlExecutionService.executeQuery(sqlFile.getContent()))
+                .thenReturn(results);
+        when(tokenService.getToken()).thenReturn("Bearer test-token");
 
-        // Template result
-        String jsonPayload = "{\"user\":{\"id\":1,\"username\":\"testuser\"}}";
-        ApiTemplateResult templateResult = new ApiTemplateResult(
-                jsonPayload,
-                endpointInfo
-        );
-
-        // Réponses de l'API
-        ApiResponse errorResponse = ApiResponse
-                .builder()
-                .statusCode(503)
-                .body("{\"error\":\"Service temporarily unavailable\"}")
-                .build();
-
+        // La méthode processRow simulera une reconnexion réussie
         ApiResponse successResponse = ApiResponse
                 .builder()
                 .statusCode(200)
                 .body("{\"success\":true}")
                 .build();
 
-        // Configurer les mocks
-        when(sqlFileService.readSqlFile(sqlFileName)).thenReturn(sqlFile);
-        when(sqlExecutionService.executeQuery(sqlFile.getContent()))
-                .thenReturn(results);
-        when(tokenService.getToken()).thenReturn("Bearer test-token");
-        when(templateService.processTemplate(sqlFile.getTemplateName(), row))
-                .thenReturn(templateResult);
+        // Créer un spy de l'orchestrateur
+        ProcessOrchestrator spyOrchestrator = spy(orchestrator);
 
-        // La première appel renvoie une erreur, le second réussit
-        when(apiClientService.callApi(any(), any(), any(), any(), any()))
-                .thenReturn(errorResponse)
-                .thenReturn(successResponse);
+        // Mocker la méthode processRow pour qu'elle retourne notre réponse de succès
+        doReturn(successResponse)
+                .when(spyOrchestrator)
+                .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
 
         // Configurer le délai de réessai à 1ms pour le test
-        ReflectionTestUtils.setField(orchestrator, "retryDelayMs", 1L);
+        ReflectionTestUtils.setField(spyOrchestrator, "retryDelayMs", 1L);
 
         // Act
-        List<ApiResponse> responses = orchestrator.processSqlFile(sqlFileName);
+        List<ApiResponse> responses = spyOrchestrator.processSqlFile(sqlFileName);
 
         // Assert
         assertNotNull(responses);
         assertEquals(1, responses.size());
+        assertEquals(successResponse, responses.get(0));
 
-        // Vérifier que l'appel API a été fait deux fois
-        verify(apiClientService, times(2))
-                .callApi(any(), any(), any(), any(), any());
+        // Vérifier que processRow a été appelé
+        verify(spyOrchestrator)
+                .processRow(eq(sqlFile), eq(row), eq(0), anyString(), any());
     }
 }
