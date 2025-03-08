@@ -1,127 +1,77 @@
 package com.etljobs.sql2json2api.service.template;
 
-import java.io.IOException;
-import java.io.StringWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import org.springframework.util.FileCopyUtils;
 
 import com.etljobs.sql2json2api.exception.TemplateProcessingException;
 import com.etljobs.sql2json2api.model.ApiEndpointInfo;
 import com.etljobs.sql2json2api.model.ApiTemplateResult;
 
-import freemarker.template.Configuration;
-import freemarker.template.Template;
-import freemarker.template.TemplateException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Service for processing Freemarker templates.
+ * Service principal pour le traitement des templates.
+ * Cette classe orchestrate les différentes étapes du traitement des templates,
+ * mais délègue les responsabilités spécifiques à des classes spécialisées.
  */
 @Service
 @Slf4j
 public class TemplateProcessingService {
     
-    @Value("${app.template.directory}")
-    private String templateDirectory;
-    
-    private final Configuration freemarkerConfig;
+    private final TemplateLoader templateLoader;
+    private final TemplateRenderer templateRenderer;
     private final TemplateMetadataService metadataService;
+    private final PlaceholderProcessor placeholderProcessor;
     
-    // Pattern pour trouver les placeholders dans la route
-    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{result\\.(\\w+)\\}");
-    
-    public TemplateProcessingService(Configuration freemarkerConfig, TemplateMetadataService metadataService) {
-        this.freemarkerConfig = freemarkerConfig;
+    public TemplateProcessingService(
+            TemplateLoader templateLoader,
+            TemplateRenderer templateRenderer,
+            TemplateMetadataService metadataService,
+            PlaceholderProcessor placeholderProcessor) {
+        this.templateLoader = templateLoader;
+        this.templateRenderer = templateRenderer;
         this.metadataService = metadataService;
+        this.placeholderProcessor = placeholderProcessor;
     }
     
     /**
-     * Reads the content of a template file.
+     * Traite un template avec une ligne de données.
      * 
-     * @param templateName The name of the template file
-     * @return The content of the template file as a String
-     * @throws IOException If the template file cannot be read
-     */
-    public String getTemplateContent(String templateName) throws IOException {
-        Resource resource = new ClassPathResource(templateDirectory + "/" + templateName);
-        byte[] bytes = FileCopyUtils.copyToByteArray(resource.getInputStream());
-        return new String(bytes, StandardCharsets.UTF_8);
-    }
-    
-    /**
-     * Processes a template with a single row of data.
-     * 
-     * @param templateName The name of the template to process
-     * @param rowData The data for a single row from SQL results
-     * @return ApiTemplateResult containing the processed JSON and API endpoint information
-     * @throws TemplateProcessingException If template processing fails
+     * @param templateName Le nom du template à traiter
+     * @param rowData Les données d'une ligne à utiliser pour le traitement
+     * @return ApiTemplateResult contenant le JSON généré et les informations d'API
+     * @throws TemplateProcessingException Si une erreur survient pendant le traitement
      */
     public ApiTemplateResult processTemplate(String templateName, Map<String, Object> rowData) {
         try {
-            log.debug("Processing template {} with data: {}", templateName, rowData);
+            log.info("Traitement du template {} pour une ligne de données", templateName);
             
-            // Get template content for metadata extraction
-            String templateContent = getTemplateContent(templateName);
+            // 1. Charger le contenu du template
+            String templateContent = templateLoader.loadTemplateContent(templateName);
             
-            // Extract API endpoint information from template
+            // 2. Extraire les métadonnées d'API
             ApiEndpointInfo endpointInfo = metadataService.extractMetadataFromTemplate(templateContent);
             
-            // Process route placeholders with row data
-            endpointInfo.setRoute(processRoutePlaceholders(endpointInfo.getRoute(), rowData));
+            // 3. Traiter les placeholders dans la route
+            String processedRoute = placeholderProcessor.processPlaceholders(
+                    endpointInfo.getRoute(), rowData);
+            endpointInfo.setRoute(processedRoute);
             
-            // Prepare data model for template processing
+            // 4. Préparer le modèle de données pour le rendu
             Map<String, Object> dataModel = new HashMap<>();
-            dataModel.put("result", rowData); // Single row data
+            dataModel.put("result", rowData);
             
-            // Process template to generate JSON
-            // Utiliser getTemplate() au lieu de créer un nouvel objet Template
-            Template template = freemarkerConfig.getTemplate(templateName);
-            StringWriter writer = new StringWriter();
-            template.process(dataModel, writer);
-            String jsonPayload = writer.toString();
+            // 5. Rendre le template pour obtenir le JSON
+            String jsonPayload = templateRenderer.renderTemplate(templateName, dataModel);
             
-            log.debug("Template processing completed. Generated JSON: {}", jsonPayload);
-            
+            // 6. Créer et retourner le résultat
             return new ApiTemplateResult(jsonPayload, endpointInfo);
             
-        } catch (IOException | TemplateException e) {
-            throw new TemplateProcessingException("Failed to process template: " + templateName, e);
+        } catch (Exception e) {
+            log.error("Erreur lors du traitement du template {}: {}", templateName, e.getMessage());
+            throw new TemplateProcessingException("Erreur lors du traitement du template: " + templateName, e);
         }
-    }
-    
-    /**
-     * Process route placeholders with actual values from row data.
-     * Example: "/api/users/${result.id}" -> "/api/users/123"
-     * 
-     * @param route The route with placeholders
-     * @param rowData The data to fill the placeholders
-     * @return The processed route with placeholders replaced by actual values
-     */
-    private String processRoutePlaceholders(String route, Map<String, Object> rowData) {
-        if (route == null) {
-            return "";
-        }
-        
-        StringBuffer result = new StringBuffer();
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(route);
-        
-        while (matcher.find()) {
-            String fieldName = matcher.group(1);
-            Object value = rowData.get(fieldName);
-            String replacement = (value != null) ? value.toString() : "";
-            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
-        }
-        
-        matcher.appendTail(result);
-        return result.toString();
     }
 }
