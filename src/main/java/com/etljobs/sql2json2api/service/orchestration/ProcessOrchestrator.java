@@ -56,10 +56,12 @@ public class ProcessOrchestrator {
     
     // Liste des codes HTTP qui méritent un réessai
     private static final List<Integer> RETRYABLE_STATUS_CODES = List.of(
-            HttpStatus.TOO_MANY_REQUESTS.value(),  // 429
-            HttpStatus.SERVICE_UNAVAILABLE.value(), // 503
-            HttpStatus.GATEWAY_TIMEOUT.value(),     // 504
-            HttpStatus.INTERNAL_SERVER_ERROR.value() // 500
+        HttpStatus.TOO_MANY_REQUESTS.value(),  // 429
+        HttpStatus.SERVICE_UNAVAILABLE.value(), // 503
+        HttpStatus.GATEWAY_TIMEOUT.value(),     // 504
+        HttpStatus.INTERNAL_SERVER_ERROR.value(), // 500
+        HttpStatus.BAD_GATEWAY.value(),         // 502
+        HttpStatus.REQUEST_TIMEOUT.value()      // 408
     );
     
     /**
@@ -113,34 +115,30 @@ public class ProcessOrchestrator {
      * @throws ProcessingException en cas d'erreur globale de traitement
      */
     public List<ApiResponse> processSqlFile(String sqlFileName) {
+        List<ApiResponse> responses = new ArrayList<>();
+        List<RowError> rowErrors = new ArrayList<>();
+        
         try {
             log.info("Début du traitement du fichier SQL: {}", sqlFileName);
             
             // 1. Lire le fichier SQL
             SqlFile sqlFile = sqlFileService.readSqlFile(sqlFileName);
-            log.debug("Fichier SQL lu: {}", sqlFile.getFileName());
             
             // 2. Exécuter la requête SQL
             List<Map<String, Object>> results = sqlExecutionService.executeQuery(sqlFile.getContent());
             log.info("Requête SQL exécutée avec succès, {} résultats obtenus", results.size());
             
-            // 3. Préparer la liste pour stocker les réponses
-            List<ApiResponse> responses = new ArrayList<>();
-            
-            // 4. Préparer la liste pour stocker les erreurs
-            List<RowError> rowErrors = new ArrayList<>();
-            
-            // 5. Si aucun résultat, retourner une liste vide
+            // 3. Si aucun résultat, retourner une liste vide
             if (results.isEmpty()) {
                 log.info("Aucun résultat à traiter pour ce fichier SQL");
                 return responses;
             }
             
-            // 6. Générer le token d'authentification (une seule fois pour tous les appels)
+            // 4. Générer le token d'authentification (une seule fois pour tous les appels)
             String token = tokenService.getToken();
             log.debug("Token d'authentification généré avec succès");
             
-            // 7. Traiter chaque ligne de résultat
+            // 5. Traiter chaque ligne de résultat
             int totalRows = results.size();
             log.info("Début du traitement des {} lignes de résultat", totalRows);
             
@@ -149,43 +147,25 @@ public class ProcessOrchestrator {
                 String rowIdentifier = extractRowIdentifier(row);
                 log.debug("Traitement de la ligne {}/{}: {}", i + 1, totalRows, rowIdentifier);
                 
-                ApiResponse response = processRowWithRetry(sqlFile, row, i, rowIdentifier, rowErrors);
+                // Traiter cette ligne avec un mécanisme de réessai
+                ApiResponse response = processRow(sqlFile, row, i, rowIdentifier, rowErrors);
                 
+                // Important: ajouter la réponse à la liste même si elle contient une erreur
                 if (response != null) {
                     responses.add(response);
-                    log.debug("Réponse ajoutée pour la ligne {}", rowIdentifier);
-                }
-                
-                // Si c'est un paquet de 10 lignes ou la dernière ligne, on fait un log
-                if ((i + 1) % 10 == 0 || i == totalRows - 1) {
-                    log.info("Progression: {}/{} lignes traitées ({} réussies, {} erreurs)", 
-                            i + 1, totalRows, responses.size(), rowErrors.size());
                 }
             }
             
-            // 8. Rapport de fin de traitement
             log.info("Traitement terminé: {}/{} lignes traitées avec succès ({} erreurs)", 
                     responses.size(), totalRows, rowErrors.size());
-            
-            // 9. Si des erreurs ont été détectées, les journaliser de manière détaillée
-            if (!rowErrors.isEmpty()) {
-                log.warn("Résumé des erreurs par ligne:");
-                for (RowError error : rowErrors) {
-                    log.warn(" - {}", error);
-                    if (error.exception != null) {
-                        log.debug("   Détail de l'erreur: ", error.exception);
-                    }
-                }
-            }
-            
-            return responses;
             
         } catch (Exception e) {
             log.error("Erreur globale lors du traitement du fichier SQL: {}", sqlFileName, e);
             throw new ProcessingException("Erreur lors du traitement du fichier SQL: " + sqlFileName, e);
         }
+        
+        return responses;
     }
-    
     /**
      * Traite une ligne avec stratégie de réessai.
      * 
@@ -253,10 +233,17 @@ public class ProcessOrchestrator {
                         continue; // Passer à la prochaine tentative
                     } else {
                         // Code d'erreur qui ne mérite pas de réessai ou max tentatives atteint
-                        String errorMsg = "L'API a répondu avec un code d'erreur " + response.getStatusCode() + 
-                                " pour la ligne " + rowIdentifier;
-                        log.warn("{}: {}", errorMsg, response.getBody());
-                        rowErrors.add(new RowError(rowIndex, row, errorMsg, null, attempt));
+                        if (attempt >= maxRetryAttempts) {
+                            String errorMsg = "L'API a répondu avec un code d'erreur " + response.getStatusCode() + 
+                                    " pour la ligne " + rowIdentifier + " après " + attempt + " tentatives";
+                            log.warn("{}: {}", errorMsg, response.getBody());
+                            rowErrors.add(new RowError(rowIndex, row, errorMsg, null, attempt));
+                        } else {
+                            String errorMsg = "L'API a répondu avec un code d'erreur non récupérable " + response.getStatusCode() + 
+                                    " pour la ligne " + rowIdentifier;
+                            log.warn("{}: {}", errorMsg, response.getBody());
+                            rowErrors.add(new RowError(rowIndex, row, errorMsg, null, attempt));
+                        }
                         
                         // Dans certains cas, on peut vouloir retourner la réponse même en cas d'erreur
                         return response;
@@ -311,7 +298,6 @@ public class ProcessOrchestrator {
         // Ce code ne devrait jamais être atteint
         return null;
     }
-    
     /**
      * Détermine si un code de statut HTTP mérite un réessai.
      * 
@@ -319,6 +305,7 @@ public class ProcessOrchestrator {
      * @return true si l'erreur est temporaire et mérite un réessai
      */
     private boolean isRetryableStatusCode(int statusCode) {
+        // Les erreurs serveur (5xx) et certaines erreurs client (429) méritent généralement un réessai
         return RETRYABLE_STATUS_CODES.contains(statusCode);
     }
     
@@ -356,5 +343,104 @@ public class ProcessOrchestrator {
         
         // Si tout échoue, utiliser un identifiant arbitraire
         return "row@" + System.identityHashCode(row);
+    }
+
+    /**
+     * Détermine si un type d'exception mérite un réessai.
+     * 
+     * @param exception L'exception à analyser
+     * @return true si l'exception est temporaire et mérite un réessai
+     */
+    private boolean isRetryableException(Exception exception) {
+        // Les exceptions de timeout ou de connexion méritent généralement un réessai
+        if (exception.getMessage() != null) {
+            String message = exception.getMessage().toLowerCase();
+            return message.contains("timeout") || 
+                message.contains("connection") || 
+                message.contains("temporary") || 
+                message.contains("overloaded");
+        }
+        return false;
+    }
+
+    /**
+    * Traite une seule ligne avec un mécanisme de réessai simplifié.
+    */
+    private ApiResponse processRow(SqlFile sqlFile, Map<String, Object> row, int rowIndex, 
+        String rowIdentifier, List<RowError> rowErrors) {
+        try {
+        // Traiter le template
+        ApiTemplateResult templateResult = templateService.processTemplate(sqlFile.getTemplateName(), row);
+
+        // Appel API avec réessai simple
+        ApiResponse response = null;
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= maxRetryAttempts; attempt++) {
+        try {
+        // Appeler l'API
+        response = apiClientService.callApi(
+        templateResult.getEndpointInfo().getRoute(),
+        templateResult.getEndpointInfo().getMethod(),
+        templateResult.getJsonPayload(),
+        templateResult.getEndpointInfo().getHeaders(),
+        templateResult.getEndpointInfo().getUrlParams());
+
+        // Si succès ou erreur non récupérable, sortir
+        if (response.isSuccess() || !isRetryableStatusCode(response.getStatusCode()) || 
+        attempt >= maxRetryAttempts) {
+        return response;
+        }
+
+        // Sinon, attendre et réessayer
+        log.warn("API a répondu avec le code {} pour la ligne {}. Réessai dans {} ms...", 
+        response.getStatusCode(), rowIdentifier, retryDelayMs);
+        sleep(retryDelayMs);
+
+        if (attempt < maxRetryAttempts) {
+        log.info("Tentative {} pour la ligne {}", attempt + 1, rowIdentifier);
+        }
+
+        } catch (Exception e) {
+        lastException = e;
+
+        if (attempt >= maxRetryAttempts) {
+        // Max tentatives atteint
+        log.error("Échec définitif pour la ligne {} après {} tentatives: {}", 
+        rowIdentifier, attempt, e.getMessage());
+        rowErrors.add(new RowError(rowIndex, row, e.getMessage(), e, attempt));
+
+        return ApiResponse.builder()
+        .statusCode(500)
+        .body("Erreur après " + attempt + " tentatives: " + e.getMessage())
+        .build();
+        }
+
+        // Attendre avant de réessayer
+        log.warn("Erreur API pour la ligne {}: {}. Réessai dans {} ms...", 
+        rowIdentifier, e.getMessage(), retryDelayMs);
+        sleep(retryDelayMs);
+        }
+        }
+
+        // Ce code ne devrait jamais être atteint
+        if (response != null) {
+        return response;
+        } else if (lastException != null) {
+        throw lastException;
+        } else {
+        throw new IllegalStateException("Situation inattendue dans processRow");
+        }
+
+        } catch (Exception e) {
+        // Erreur de template ou autre erreur non récupérable
+        log.error("Erreur non récupérable pour la ligne {}: {}", rowIdentifier, e.getMessage());
+        rowErrors.add(new RowError(rowIndex, row, e.getMessage(), e, 1));
+
+        return ApiResponse.builder()
+        .statusCode(500)
+        .body("Erreur de traitement: " + e.getMessage())
+        .build();
+        }
     }
 }
