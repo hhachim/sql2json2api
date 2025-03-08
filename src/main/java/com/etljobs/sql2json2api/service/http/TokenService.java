@@ -87,6 +87,7 @@ public class TokenService {
             Map<String, String> requestBody = new HashMap<>();
             requestBody.put("username", username);
             requestBody.put("password", password);
+            requestBody.put("context","api");
             
             // Create HTTP entity with headers and body
             HttpEntity<Map<String, String>> entity = new HttpEntity<>(requestBody, headers);

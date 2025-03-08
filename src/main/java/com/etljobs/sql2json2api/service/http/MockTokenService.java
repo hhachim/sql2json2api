@@ -1,9 +1,12 @@
 package com.etljobs.sql2json2api.service.http;
 
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * A mock implementation of TokenService for testing purposes.
@@ -11,10 +14,11 @@ import com.etljobs.sql2json2api.model.AuthenticationDetails;
  */
 @Service
 @Profile("api-call-demo")
+@Primary
 public class MockTokenService extends TokenService {
     
-    public MockTokenService() {
-        super(null, null); // Null arguments will be ignored
+    public MockTokenService(RestTemplate restTemplate, ObjectMapper objectMapper) {
+        super(restTemplate, objectMapper); // Injecter les vrais objets
     }
     
     /**
