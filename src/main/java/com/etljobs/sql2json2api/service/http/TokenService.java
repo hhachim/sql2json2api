@@ -1,5 +1,7 @@
 package com.etljobs.sql2json2api.service.http;
 
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -13,18 +15,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import com.etljobs.sql2json2api.config.AuthPayloadConfig;
 import com.etljobs.sql2json2api.exception.ApiCallException;
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import freemarker.template.Configuration;
+import freemarker.template.Template;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Service responsible for generating and managing authentication tokens.
- */
 @Service
 @Slf4j
 public class TokenService {
@@ -41,56 +40,46 @@ public class TokenService {
     @Value("${api.auth.token-ttl:3600}")
     private long tokenTtlSeconds;
     
+    @Value("${api.auth.payload-template:{\"username\":\"${username}\",\"password\":\"${password}\"}}")
+    private String payloadTemplate;
+    
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final AuthPayloadConfig authPayloadConfig;
-
+    private final Configuration freemarkerConfiguration;
     
     private String cachedToken;
     private Instant tokenExpiration;
     
-    public TokenService(RestTemplate restTemplate, ObjectMapper objectMapper, AuthPayloadConfig authPayloadConfig) {
+    public TokenService(RestTemplate restTemplate, ObjectMapper objectMapper, Configuration freemarkerConfiguration) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
-        this.authPayloadConfig = authPayloadConfig;
+        this.freemarkerConfiguration = freemarkerConfiguration;
     }
 
     /**
-     * Crée un payload d'authentification selon le format configuré
+     * Génère le payload JSON à partir du template Freemarker et des variables d'authentification
      * 
-     * @return Map contenant le payload
+     * @return Le payload JSON généré
+     * @throws Exception Si une erreur survient lors du traitement du template
      */
-    protected Map<String, Object> createAuthPayload() {
-        Map<String, Object> payload = new HashMap<>();
-        String format = authPayloadConfig.getPayloadFormat();
+    protected String generatePayload() throws Exception {
+        // Créer un template Freemarker à partir de la chaîne de caractères
+        Template template = new Template("authPayloadTemplate", 
+                new StringReader(payloadTemplate), 
+                freemarkerConfiguration);
         
-        // Ajouter username et password avec les noms de champs configurés
-        payload.put(authPayloadConfig.getUsernameField(), username);
-        payload.put(authPayloadConfig.getPasswordField(), password);
+        // Préparer le modèle de données pour Freemarker
+        Map<String, Object> dataModel = new HashMap<>();
+        dataModel.put("username", username);
+        dataModel.put("password", password);
         
-        // Selon le format, ajouter des champs supplémentaires
-        switch (format) {
-            case "api-context":
-                // Format spécifique avec champ "context": "api"
-                payload.put("context", "api");
-                break;
-            case "jwt":
-                // Format pour certains serveurs JWT
-                payload.put("grant_type", "password");
-                break;
-            case "custom":
-                // Utiliser les champs additionnels configurés
-                payload.putAll(authPayloadConfig.getAdditionalFields());
-                break;
-            case "default":
-            default:
-                // Format simple username/password, rien à ajouter
-                break;
-        }
+        // Traiter le template
+        StringWriter writer = new StringWriter();
+        template.process(dataModel, writer);
         
-        return payload;
+        return writer.toString();
     }
-    
+
     /**
      * Generates or returns a cached valid authentication token.
      * 
@@ -123,11 +112,12 @@ public class TokenService {
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
             
-            // Préparer le payload selon la configuration
-            Map<String, Object> requestBody = createAuthPayload();
+            // Générer le payload JSON en utilisant Freemarker
+            String payload = generatePayload();
+            log.debug("Auth request payload (generated with Freemarker): {}", payload);
             
-            // Create HTTP entity with headers and body
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            // Create HTTP entity with headers and payload
+            HttpEntity<String> entity = new HttpEntity<>(payload, headers);
             
             // Make the API call
             ResponseEntity<String> response = restTemplate.exchange(
@@ -136,15 +126,16 @@ public class TokenService {
             // Process the response
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 String tokenResponse = response.getBody();
+                log.debug("Auth response received: {}", tokenResponse);
                 
-                // Extract token from response (format may vary depending on your API)
+                // Extract token from response
                 JsonNode rootNode = objectMapper.readTree(tokenResponse);
                 String token = extractToken(rootNode);
                 
                 // Cache the token
                 cachedToken = "Bearer " + token;
                 
-                // Set expiration (default to configured TTL or 1 hour if not specified)
+                // Set expiration
                 tokenExpiration = Instant.now().plus(Duration.ofSeconds(tokenTtlSeconds));
                 
                 log.debug("New token generated, expires at: {}", tokenExpiration);
@@ -154,8 +145,6 @@ public class TokenService {
                 throw new ApiCallException("Failed to get authentication token. Status: " 
                         + response.getStatusCode());
             }
-        } catch (JsonProcessingException e) {
-            throw new ApiCallException("Failed to parse authentication token response", e);
         } catch (Exception e) {
             throw new ApiCallException("Failed to generate authentication token", e);
         }

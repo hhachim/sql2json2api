@@ -5,21 +5,21 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import com.etljobs.sql2json2api.config.AuthPayloadConfig;
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import freemarker.template.Configuration;
+
 /**
  * A mock implementation of TokenService for testing purposes.
- * This will be used only when the 'api-call-demo' profile is active.
  */
 @Service
 @Profile("api-call-demo")
 @Primary
 public class MockTokenService extends TokenService {
     
-    public MockTokenService(RestTemplate restTemplate, ObjectMapper objectMapper, AuthPayloadConfig authPayloadConfig) {
-        super(restTemplate, objectMapper, authPayloadConfig);
+    public MockTokenService(RestTemplate restTemplate, ObjectMapper objectMapper, Configuration freemarkerConfiguration) {
+        super(restTemplate, objectMapper, freemarkerConfiguration);
     }
     
     /**

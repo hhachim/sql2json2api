@@ -30,15 +30,14 @@ api:
     username: admin_api
     password: gnDLta18o53x+4+/+MH/R/jX06V
     token-ttl: 3600
-    # Configuration du format de payload
-    payload-format: api-context
-    # Éventuels champs additionnels, utilisés lorsque format = custom
-    additional-fields:
-      tenant: "default"
-      client-id: "web-app"
-    # Noms des champs pour username/password (optionnel, valeurs par défaut: username/password)
-    username-field: username
-    password-field: password
+    # Template JSON pour le payload d'authentification
+    # Peut contenir des placeholders: ${username}, ${password} pour les informations d'authentification
+    payload-template: >
+      {
+        "username": "${username}",
+        "password": "${password}",
+        "context": "api"
+      }
 
 logging:
   level:
