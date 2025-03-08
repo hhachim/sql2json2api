@@ -364,19 +364,24 @@ public class ProcessOrchestrator {
     }
 
     /**
-    * Traite une seule ligne avec un mécanisme de réessai simplifié.
-    */
+     * Traite une seule ligne avec un mécanisme de réessai simplifié.
+     */
     private ApiResponse processRow(SqlFile sqlFile, Map<String, Object> row, int rowIndex, 
         String rowIdentifier, List<RowError> rowErrors) {
         try {
         // Traiter le template
         ApiTemplateResult templateResult = templateService.processTemplate(sqlFile.getTemplateName(), row);
 
-        // Appel API avec réessai simple
+        // Variables pour stocker le résultat et l'erreur
         ApiResponse response = null;
-        Exception lastException = null;
+        Exception lastError = null;
 
+        // Tenter l'appel API avec réessai
         for (int attempt = 1; attempt <= maxRetryAttempts; attempt++) {
+        if (attempt > 1) {
+        log.info("Tentative {} pour la ligne {}", attempt, rowIdentifier);
+        }
+
         try {
         // Appeler l'API
         response = apiClientService.callApi(
@@ -386,30 +391,30 @@ public class ProcessOrchestrator {
         templateResult.getEndpointInfo().getHeaders(),
         templateResult.getEndpointInfo().getUrlParams());
 
-        // Si succès ou erreur non récupérable, sortir
+        // Vérifier si l'appel a réussi ou si c'est une erreur non récupérable
         if (response.isSuccess() || !isRetryableStatusCode(response.getStatusCode()) || 
-        attempt >= maxRetryAttempts) {
-        return response;
+        attempt == maxRetryAttempts) {
+        return response; // On retourne la réponse même en cas d'erreur
         }
 
-        // Sinon, attendre et réessayer
+        // C'est une erreur récupérable, et on n'a pas atteint le max de tentatives
         log.warn("API a répondu avec le code {} pour la ligne {}. Réessai dans {} ms...", 
         response.getStatusCode(), rowIdentifier, retryDelayMs);
+
         sleep(retryDelayMs);
 
-        if (attempt < maxRetryAttempts) {
-        log.info("Tentative {} pour la ligne {}", attempt + 1, rowIdentifier);
-        }
-
         } catch (Exception e) {
-        lastException = e;
+        lastError = e;
 
-        if (attempt >= maxRetryAttempts) {
-        // Max tentatives atteint
+        if (attempt == maxRetryAttempts) {
+        // On a atteint le max de tentatives, créer une réponse d'erreur
         log.error("Échec définitif pour la ligne {} après {} tentatives: {}", 
         rowIdentifier, attempt, e.getMessage());
+
+        // Ajouter aux erreurs
         rowErrors.add(new RowError(rowIndex, row, e.getMessage(), e, attempt));
 
+        // Retourner une réponse d'erreur
         return ApiResponse.builder()
         .statusCode(500)
         .body("Erreur après " + attempt + " tentatives: " + e.getMessage())
@@ -417,29 +422,44 @@ public class ProcessOrchestrator {
         }
 
         // Attendre avant de réessayer
-        log.warn("Erreur API pour la ligne {}: {}. Réessai dans {} ms...", 
+        log.warn("Erreur lors de l'appel API pour la ligne {}: {}. Réessai dans {} ms...", 
         rowIdentifier, e.getMessage(), retryDelayMs);
+
         sleep(retryDelayMs);
         }
         }
 
-        // Ce code ne devrait jamais être atteint
-        if (response != null) {
-        return response;
-        } else if (lastException != null) {
-        throw lastException;
+        // Si on arrive ici, c'est qu'il y a eu une erreur mais on n'a pas atteint maxRetryAttempts
+        // Ce cas est théoriquement impossible avec la logique ci-dessus
+        if (lastError != null) {
+        return ApiResponse.builder()
+        .statusCode(500)
+        .body("Erreur non gérée: " + lastError.getMessage())
+        .build();
         } else {
-        throw new IllegalStateException("Situation inattendue dans processRow");
+        return ApiResponse.builder()
+        .statusCode(500)
+        .body("Erreur inconnue: aucune réponse ni erreur générée")
+        .build();
         }
 
-        } catch (Exception e) {
-        // Erreur de template ou autre erreur non récupérable
-        log.error("Erreur non récupérable pour la ligne {}: {}", rowIdentifier, e.getMessage());
+        } catch (TemplateProcessingException e) {
+        // Erreur lors du traitement du template, non récupérable
+        log.error("Erreur de template pour la ligne {}: {}", rowIdentifier, e.getMessage());
         rowErrors.add(new RowError(rowIndex, row, e.getMessage(), e, 1));
 
         return ApiResponse.builder()
         .statusCode(500)
-        .body("Erreur de traitement: " + e.getMessage())
+        .body("Erreur de template: " + e.getMessage())
+        .build();
+        } catch (Exception e) {
+        // Toute autre erreur non prévue
+        log.error("Erreur inattendue pour la ligne {}: {}", rowIdentifier, e.getMessage());
+        rowErrors.add(new RowError(rowIndex, row, e.getMessage(), e, 1));
+
+        return ApiResponse.builder()
+        .statusCode(500)
+        .body("Erreur inattendue: " + e.getMessage())
         .build();
         }
     }
