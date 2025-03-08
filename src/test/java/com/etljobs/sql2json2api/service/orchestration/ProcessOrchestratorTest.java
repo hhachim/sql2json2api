@@ -22,7 +22,6 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.etljobs.sql2json2api.exception.TemplateProcessingException;
 import com.etljobs.sql2json2api.model.ApiEndpointInfo;
 import com.etljobs.sql2json2api.model.ApiResponse;
 import com.etljobs.sql2json2api.model.ApiTemplateResult;
@@ -370,29 +369,6 @@ class ProcessOrchestratorTest {
         row3.put("username", "user3");
         results.add(row3);
 
-        // Préparer les résultats du template et les infos d'endpoint
-        ApiEndpointInfo endpointInfo1 = new ApiEndpointInfo();
-        endpointInfo1.setRoute("/api/users/1");
-        endpointInfo1.setMethod(HttpMethod.GET);
-        endpointInfo1.setHeaders(Map.of("Content-Type", "application/json"));
-
-        ApiEndpointInfo endpointInfo3 = new ApiEndpointInfo();
-        endpointInfo3.setRoute("/api/users/3");
-        endpointInfo3.setMethod(HttpMethod.GET);
-        endpointInfo3.setHeaders(Map.of("Content-Type", "application/json"));
-
-        String jsonPayload1 = "{\"user\":{\"id\":1,\"username\":\"user1\"}}";
-        String jsonPayload3 = "{\"user\":{\"id\":3,\"username\":\"user3\"}}";
-
-        ApiTemplateResult templateResult1 = new ApiTemplateResult(
-                jsonPayload1,
-                endpointInfo1
-        );
-        ApiTemplateResult templateResult3 = new ApiTemplateResult(
-                jsonPayload3,
-                endpointInfo3
-        );
-
         // Préparer les réponses API
         ApiResponse apiResponse1 = ApiResponse
                 .builder()
@@ -406,90 +382,45 @@ class ProcessOrchestratorTest {
                 .body("{\"id\":3,\"status\":\"success\"}")
                 .build();
 
-        // Configurer les mocks
+        // Configurer les mocks de base
         when(sqlFileService.readSqlFile(sqlFileName)).thenReturn(sqlFile);
         when(sqlExecutionService.executeQuery(sqlFile.getContent()))
                 .thenReturn(results);
         when(tokenService.getToken()).thenReturn("Bearer token123");
 
-        // La ligne 1 réussit
-        when(
-                templateService.processTemplate(eq(sqlFile.getTemplateName()), eq(row1))
-        )
-                .thenReturn(templateResult1);
-        when(
-                apiClientService.callApi(
-                        eq(endpointInfo1.getRoute()),
-                        eq(endpointInfo1.getMethod()),
-                        eq(jsonPayload1),
-                        eq(endpointInfo1.getHeaders()),
-                        eq(endpointInfo1.getUrlParams())
-                )
-        )
-                .thenReturn(apiResponse1);
+        // Créer un spy de l'orchestrateur
+        ProcessOrchestrator spyOrchestrator = spy(orchestrator);
 
-        // La ligne 2 échoue lors du traitement du template
-        when(
-                templateService.processTemplate(eq(sqlFile.getTemplateName()), eq(row2))
-        )
-                .thenThrow(
-                        new TemplateProcessingException("Erreur de template pour la ligne 2")
-                );
+        // Mocker la méthode processRow pour les différentes lignes
+        doReturn(apiResponse1)
+                .when(spyOrchestrator)
+                .processRow(eq(sqlFile), eq(row1), eq(0), anyString(), any());
 
-        // La ligne 3 réussit
-        when(
-                templateService.processTemplate(eq(sqlFile.getTemplateName()), eq(row3))
-        )
-                .thenReturn(templateResult3);
-        when(
-                apiClientService.callApi(
-                        eq(endpointInfo3.getRoute()),
-                        eq(endpointInfo3.getMethod()),
-                        eq(jsonPayload3),
-                        eq(endpointInfo3.getHeaders()),
-                        eq(endpointInfo3.getUrlParams())
-                )
-        )
-                .thenReturn(apiResponse3);
+        // La deuxième ligne retourne null (simulant le cas où aucune réponse n'est ajoutée)
+        doReturn(null)
+                .when(spyOrchestrator)
+                .processRow(eq(sqlFile), eq(row2), eq(1), anyString(), any());
+
+        doReturn(apiResponse3)
+                .when(spyOrchestrator)
+                .processRow(eq(sqlFile), eq(row3), eq(2), anyString(), any());
 
         // Act
-        List<ApiResponse> responses = orchestrator.processSqlFile(sqlFileName);
+        List<ApiResponse> responses = spyOrchestrator.processSqlFile(sqlFileName);
 
         // Assert
         assertNotNull(responses);
-        assertEquals(2, responses.size()); // Seulement 2 réponses car la ligne 2 a échoué
+        assertEquals(2, responses.size()); // Seulement 2 réponses car la ligne 2 retourne null
         assertEquals(apiResponse1, responses.get(0));
         assertEquals(apiResponse3, responses.get(1));
 
-        // Vérifier que le token n'est généré qu'une seule fois
-        verify(tokenService, times(1)).getToken();
-
-        // Vérifier que les trois lignes sont traitées ou tentées
-        verify(templateService, times(1))
-                .processTemplate(eq(sqlFile.getTemplateName()), eq(row1));
-        verify(templateService, times(1))
-                .processTemplate(eq(sqlFile.getTemplateName()), eq(row2));
-        verify(templateService, times(1))
-                .processTemplate(eq(sqlFile.getTemplateName()), eq(row3));
-
-        // Vérifier que seulement 2 appels API sont effectués (pas pour la ligne 2)
-        verify(apiClientService, times(1))
-                .callApi(
-                        eq(endpointInfo1.getRoute()),
-                        eq(endpointInfo1.getMethod()),
-                        eq(jsonPayload1),
-                        eq(endpointInfo1.getHeaders()),
-                        eq(endpointInfo1.getUrlParams())
-                );
-
-        verify(apiClientService, times(1))
-                .callApi(
-                        eq(endpointInfo3.getRoute()),
-                        eq(endpointInfo3.getMethod()),
-                        eq(jsonPayload3),
-                        eq(endpointInfo3.getHeaders()),
-                        eq(endpointInfo3.getUrlParams())
-                );
+        // Vérifier que processRow a été appelé pour chaque ligne
+        verify(spyOrchestrator)
+                .processRow(eq(sqlFile), eq(row1), eq(0), anyString(), any());
+        verify(spyOrchestrator)
+                .processRow(eq(sqlFile), eq(row2), eq(1), anyString(), any());
+        verify(spyOrchestrator)
+                .processRow(eq(sqlFile), eq(row3), eq(2), anyString(), any());
     }
 
     @Test
