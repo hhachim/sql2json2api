@@ -1,5 +1,8 @@
 package com.etljobs.sql2json2api.service.http;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,6 +26,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
+import com.etljobs.sql2json2api.config.AuthPayloadConfig;
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -31,6 +35,9 @@ class TokenServiceTest {
 
     @Mock
     private RestTemplate restTemplate;
+
+    @Mock
+    private AuthPayloadConfig authPayloadConfig;
     
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -45,6 +52,12 @@ class TokenServiceTest {
         ReflectionTestUtils.setField(tokenService, "username", "testuser");
         ReflectionTestUtils.setField(tokenService, "password", "testpass");
         ReflectionTestUtils.setField(tokenService, "tokenTtlSeconds", 3600L);
+        
+        // Configuration du mock AuthPayloadConfig
+        when(authPayloadConfig.getPayloadFormat()).thenReturn("default");
+        when(authPayloadConfig.getUsernameField()).thenReturn("username");
+        when(authPayloadConfig.getPasswordField()).thenReturn("password");
+        when(authPayloadConfig.getAdditionalFields()).thenReturn(new HashMap<>());
     }
     
     @Test
@@ -160,5 +173,37 @@ class TokenServiceTest {
         assertEquals("testuser", authDetails.getUsername());
         assertEquals("*****", authDetails.getPassword()); // Password should be masked
         assertEquals("Bearer abc123", authDetails.getToken());
+    }
+
+    @Test
+    void createAuthPayload_ShouldReturnCorrectFormat_ForDifferentFormats() {
+        // Test pour format par défaut
+        when(authPayloadConfig.getPayloadFormat()).thenReturn("default");
+        Map<String, Object> defaultPayload = tokenService.createAuthPayload();
+        assertEquals(2, defaultPayload.size());
+        assertEquals("testuser", defaultPayload.get("username"));
+        assertEquals("testpass", defaultPayload.get("password"));
+        
+        // Test pour format api-context
+        when(authPayloadConfig.getPayloadFormat()).thenReturn("api-context");
+        Map<String, Object> apiContextPayload = tokenService.createAuthPayload();
+        assertEquals(3, apiContextPayload.size());
+        assertEquals("testuser", apiContextPayload.get("username"));
+        assertEquals("testpass", apiContextPayload.get("password"));
+        assertEquals("api", apiContextPayload.get("context"));
+        
+        // Test pour format custom avec champs additionnels
+        when(authPayloadConfig.getPayloadFormat()).thenReturn("custom");
+        Map<String, String> additionalFields = new HashMap<>();
+        additionalFields.put("tenant", "default");
+        additionalFields.put("client-id", "web-app");
+        when(authPayloadConfig.getAdditionalFields()).thenReturn(additionalFields);
+        
+        Map<String, Object> customPayload = tokenService.createAuthPayload();
+        assertEquals(4, customPayload.size());
+        assertEquals("testuser", customPayload.get("username"));
+        assertEquals("testpass", customPayload.get("password"));
+        assertEquals("default", customPayload.get("tenant"));
+        assertEquals("web-app", customPayload.get("client-id"));
     }
 }

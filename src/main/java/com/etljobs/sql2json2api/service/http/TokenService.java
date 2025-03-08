@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.etljobs.sql2json2api.config.AuthPayloadConfig;
 import com.etljobs.sql2json2api.exception.ApiCallException;
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -42,13 +43,52 @@ public class TokenService {
     
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final AuthPayloadConfig authPayloadConfig;
+
     
     private String cachedToken;
     private Instant tokenExpiration;
     
-    public TokenService(RestTemplate restTemplate, ObjectMapper objectMapper) {
+    public TokenService(RestTemplate restTemplate, ObjectMapper objectMapper, AuthPayloadConfig authPayloadConfig) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
+        this.authPayloadConfig = authPayloadConfig;
+    }
+
+    /**
+     * Crée un payload d'authentification selon le format configuré
+     * 
+     * @return Map contenant le payload
+     */
+    protected Map<String, Object> createAuthPayload() {
+        Map<String, Object> payload = new HashMap<>();
+        String format = authPayloadConfig.getPayloadFormat();
+        
+        // Ajouter username et password avec les noms de champs configurés
+        payload.put(authPayloadConfig.getUsernameField(), username);
+        payload.put(authPayloadConfig.getPasswordField(), password);
+        
+        // Selon le format, ajouter des champs supplémentaires
+        switch (format) {
+            case "api-context":
+                // Format spécifique avec champ "context": "api"
+                payload.put("context", "api");
+                break;
+            case "jwt":
+                // Format pour certains serveurs JWT
+                payload.put("grant_type", "password");
+                break;
+            case "custom":
+                // Utiliser les champs additionnels configurés
+                payload.putAll(authPayloadConfig.getAdditionalFields());
+                break;
+            case "default":
+            default:
+                // Format simple username/password, rien à ajouter
+                break;
+        }
+        
+        return payload;
     }
     
     /**
@@ -83,14 +123,11 @@ public class TokenService {
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
             
-            // Prepare request body
-            Map<String, String> requestBody = new HashMap<>();
-            requestBody.put("username", username);
-            requestBody.put("password", password);
-            requestBody.put("context","api");
+            // Préparer le payload selon la configuration
+            Map<String, Object> requestBody = createAuthPayload();
             
             // Create HTTP entity with headers and body
-            HttpEntity<Map<String, String>> entity = new HttpEntity<>(requestBody, headers);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
             
             // Make the API call
             ResponseEntity<String> response = restTemplate.exchange(
