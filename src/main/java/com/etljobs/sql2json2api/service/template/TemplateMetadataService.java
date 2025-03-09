@@ -24,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TemplateMetadataService {
     
-    private static final Pattern METADATA_PATTERN = Pattern.compile("@api-(\\w+):\\s*([^@\\n]+)", Pattern.DOTALL);
+    private static final Pattern METADATA_PATTERN = Pattern.compile("@api-(\\w+):\\s*([^@]*?)(?=\\s*-->|\\s*@api-|\\s*$)", Pattern.DOTALL);
     //private static final Pattern METADATA_PATTERN = Pattern.compile("<#--\\s*@api-(\\w+):\\s*([^@]+?)\\s*(?=-->|@api-)", Pattern.DOTALL);
     private final ObjectMapper objectMapper;
     
