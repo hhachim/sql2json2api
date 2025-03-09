@@ -1,13 +1,15 @@
 package com.etljobs.sql2json2api.service.template;
 
+import java.io.IOException;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
+import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.model.SqlFile;
-import com.etljobs.sql2json2api.util.ResourceLoader;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,11 +25,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TemplateFinder {
     
-    @Value("${app.template.directory}")
-    private String templateDirectory;
+    private final PathsConfig pathsConfig;
     
-    @Value("${app.template.use-external-path:false}")
-    private boolean useExternalPath;
+    // Le rendre protected pour les tests
+    protected PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+    
+    @Autowired
+    public TemplateFinder(PathsConfig pathsConfig) {
+        this.pathsConfig = pathsConfig;
+    }
     
     /**
      * Trouve le template correspondant à un fichier SQL.
@@ -73,17 +79,15 @@ public class TemplateFinder {
      */
     public boolean templateExists(String templateName) {
         try {
-            String templatePath = templateDirectory + "/" + templateName;
-            Resource resource = ResourceLoader.getResource(templatePath, useExternalPath);
-            return resource.exists();
-        } catch (Exception e) {
+            String resolvedPath = pathsConfig.resolvedTemplateDirectory() + "/" + templateName;
+            Resource[] resources = resolver.getResources(resolvedPath);
+            return resources.length > 0 && resources[0].exists();
+        } catch (IOException e) {
             log.warn("Erreur lors de la vérification de l'existence du template {}: {}", 
                     templateName, e.getMessage());
             return false;
         }
     }
-    
-    // Autres méthodes existantes restent inchangées...
     
     /**
      * Méthode alternative qui trouve un template en utilisant des règles plus flexibles

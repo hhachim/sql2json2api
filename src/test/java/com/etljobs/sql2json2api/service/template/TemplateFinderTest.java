@@ -16,23 +16,29 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.model.SqlFile;
 
 class TemplateFinderTest {
 
     private TemplateFinder templateFinder;
     private PathMatchingResourcePatternResolver mockResolver;
+    private PathsConfig mockPathsConfig;
     
     @BeforeEach
     void setUp() {
         // Créer un mock du résolveur
         mockResolver = mock(PathMatchingResourcePatternResolver.class);
         
+        // Créer un mock de PathsConfig
+        mockPathsConfig = mock(PathsConfig.class);
+        when(mockPathsConfig.getTemplateDirectory()).thenReturn("templates/json");
+        when(mockPathsConfig.resolvedTemplateDirectory()).thenReturn("classpath:templates/json");
+        
         // Créer l'instance réelle (pas un spy)
-        templateFinder = new TemplateFinder();
+        templateFinder = new TemplateFinder(mockPathsConfig);
         
         // Définir les champs via reflection
-        ReflectionTestUtils.setField(templateFinder, "templateDirectory", "templates/json");
         ReflectionTestUtils.setField(templateFinder, "resolver", mockResolver);
     }
     

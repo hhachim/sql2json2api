@@ -80,7 +80,7 @@ public class FileUtils {
     /**
      * Lists all resources matching a pattern.
      *
-     * @param locationPattern The classpath pattern
+     * @param locationPattern The resource pattern (can be classpath or file based)
      * @return An array of resources matching the pattern
      * @throws IOException If an I/O error occurs
      */

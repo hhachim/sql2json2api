@@ -11,8 +11,8 @@
 - [ ] un api call run dynamique (dev ou prod suivant une variable d'env)
 - [ ] header par defaut : {"Content-Type": "application/json", "Accept": "application/json"}
 - [ ] autoriser une nomenclature sans casse des fichiers sql et templates
-
-
+- [ ] conf destination de log, avec rotation
+- [ ] rendre les ressources relatif à spring.config.location (par exemple au lieu de use-external-path: false, avoir path_type:absolut,classpath,relative_to_spring.config.location)
 # Backlog
 
 - [ ] versions ultérieurs : pouvoir alimenter un template via plusieurs sql

@@ -87,7 +87,7 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
                 List<ApiResponse> responses = new ArrayList<>();
 
                 // Process only the first 2 results for demo purposes
-                int rowsToProcess = Math.min(2, results.size());
+                int rowsToProcess = results.size();//Math.min(2, results.size());
                 for (int i = 0; i < rowsToProcess; i++) {
                     Map<String, Object> row = results.get(i);
                     log.info("\nProcessing row {}: {}", i + 1, row);

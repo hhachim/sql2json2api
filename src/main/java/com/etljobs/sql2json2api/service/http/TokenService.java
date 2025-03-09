@@ -16,9 +16,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.exception.ApiCallException;
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
-import com.etljobs.sql2json2api.util.ResourceLoader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -29,103 +29,90 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @Slf4j
 public class TokenService {
-
+    
     @Value("${api.auth.url}")
     private String authUrl;
-
+    
     @Value("${api.auth.username}")
     private String username;
-
+    
     @Value("${api.auth.password}")
     private String password;
-
+    
     @Value("${api.auth.token-ttl:3600}")
     private long tokenTtlSeconds;
-
-    @Value("${api.auth.payload-template-path:auth/auth-payload.ftlh}")
-    private String payloadTemplatePath;
-
-    @Value("${api.auth.use-external-path:false}")
-    private boolean useExternalPath;
-
+    
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final Configuration freemarkerConfiguration;
-
+    private final PathsConfig pathsConfig;
+    
     private String cachedToken;
     private Instant tokenExpiration;
-
+    
     @Autowired
-    public TokenService(RestTemplate restTemplate, ObjectMapper objectMapper,
-            @Qualifier("freemarkerConfiguration") Configuration freemarkerConfiguration) {
+    public TokenService(
+            RestTemplate restTemplate, 
+            ObjectMapper objectMapper, 
+            @Qualifier("freemarkerConfiguration") Configuration freemarkerConfiguration,
+            PathsConfig pathsConfig) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.freemarkerConfiguration = freemarkerConfiguration;
+        this.pathsConfig = pathsConfig;
     }
 
     /**
-     * Génère le payload JSON à partir du template Freemarker et des variables
-     * d'authentification
-     *
+     * Génère le payload JSON à partir du template Freemarker et des variables d'authentification
+     * 
      * @return Le payload JSON généré
      * @throws Exception Si une erreur survient lors du traitement du template
      */
     protected String generatePayload() throws Exception {
-        // Créer un template à partir de la ressource
-        Template template;
-
-        if (useExternalPath) {
-            // Charger le template depuis un fichier externe
-            log.debug("Chargement du template d'authentification depuis un chemin externe: {}", payloadTemplatePath);
-
-            // Pour un fichier externe, nous devons d'abord charger le contenu, puis créer le template
-            org.springframework.core.io.Resource resource = ResourceLoader.getResource(payloadTemplatePath, true);
-            String templateContent = new String(resource.getInputStream().readAllBytes());
-
-            // Créer un template à partir du contenu string
-            template = new Template("authTemplate", templateContent, freemarkerConfiguration);
-        } else {
-            // Charger le template depuis le classpath (méthode actuelle)
-            log.debug("Chargement du template d'authentification depuis le classpath: {}", payloadTemplatePath);
-            template = freemarkerConfiguration.getTemplate(payloadTemplatePath);
-        }
-
+        // Charger le template depuis le chemin configuré
+        // Le chemin doit être relatif au templateDirectory configuré dans FreemarkerConfiguration
+        // et non un chemin complet résolu
+        String templatePath = pathsConfig.getAuthTemplatePath();
+        
+        // Pour assurer la compatibilité, on utilise le chemin relatif tel quel
+        // La configuration de freemarker s'occupe de résoudre le chemin
+        Template template = freemarkerConfiguration.getTemplate(templatePath);
+        
         // Préparer le modèle de données pour Freemarker
         Map<String, Object> dataModel = new HashMap<>();
         dataModel.put("username", username);
         dataModel.put("password", password);
-
+        
         // Traiter le template
         StringWriter writer = new StringWriter();
         template.process(dataModel, writer);
-
+        
         return writer.toString();
     }
 
-    // Le reste de la classe reste inchangé
     /**
      * Generates or returns a cached valid authentication token.
-     *
+     * 
      * @return A valid Bearer token
      * @throws ApiCallException if token generation fails
      */
     public String getToken() {
         // Check if we have a cached token that's still valid
-        if (cachedToken != null && tokenExpiration != null
-                && tokenExpiration.isAfter(Instant.now().plus(Duration.ofMinutes(5)))) {
-            log.debug("Using cached token (expires in {} seconds)",
+        if (cachedToken != null && tokenExpiration != null && 
+                tokenExpiration.isAfter(Instant.now().plus(Duration.ofMinutes(5)))) {
+            log.debug("Using cached token (expires in {} seconds)", 
                     Duration.between(Instant.now(), tokenExpiration).getSeconds());
             return cachedToken;
         }
-
+        
         // Otherwise, generate a new token
         log.debug("Generating new authentication token...");
         return generateNewToken();
     }
-
+    
     /**
      * Makes an API call to generate a new authentication token.
-     *
+     * 
      * @return A new Bearer token
      * @throws ApiCallException if token generation fails
      */
@@ -134,48 +121,48 @@ public class TokenService {
             // Prepare request headers
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
-
+            
             // Générer le payload JSON en utilisant Freemarker
             String payload = generatePayload();
             log.debug("Auth request payload (generated with Freemarker): {}", payload);
-
+            
             // Create HTTP entity with headers and payload
             HttpEntity<String> entity = new HttpEntity<>(payload, headers);
-
+            
             // Make the API call
             ResponseEntity<String> response = restTemplate.exchange(
                     authUrl, HttpMethod.POST, entity, String.class);
-
+            
             // Process the response
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 String tokenResponse = response.getBody();
                 log.debug("Auth response received: {}", tokenResponse);
-
+                
                 // Extract token from response
                 JsonNode rootNode = objectMapper.readTree(tokenResponse);
                 String token = extractToken(rootNode);
-
+                
                 // Cache the token
                 cachedToken = "Bearer " + token;
-
+                
                 // Set expiration
                 tokenExpiration = Instant.now().plus(Duration.ofSeconds(tokenTtlSeconds));
-
+                
                 log.debug("New token generated, expires at: {}", tokenExpiration);
-
+                
                 return cachedToken;
             } else {
-                throw new ApiCallException("Failed to get authentication token. Status: "
+                throw new ApiCallException("Failed to get authentication token. Status: " 
                         + response.getStatusCode());
             }
         } catch (Exception e) {
             throw new ApiCallException("Failed to generate authentication token", e);
         }
     }
-
+    
     /**
-     * Extract the token from the API response. This method can be customized
-     * based on the actual response format from your auth API.
+     * Extract the token from the API response.
+     * This method can be customized based on the actual response format from your auth API.
      */
     private String extractToken(JsonNode rootNode) {
         // Depending on your API, adapt this to extract the token correctly
@@ -188,10 +175,10 @@ public class TokenService {
             throw new ApiCallException("Could not find token in authentication response");
         }
     }
-
+    
     /**
      * Returns the authentication details, including the token.
-     *
+     * 
      * @return AuthenticationDetails containing auth info and token
      */
     public AuthenticationDetails getAuthenticationDetails() {
@@ -202,10 +189,10 @@ public class TokenService {
                 .token(getToken())
                 .build();
     }
-
+    
     /**
      * Force a refresh of the token regardless of its current state.
-     *
+     * 
      * @return The newly generated token
      */
     public String refreshToken() {

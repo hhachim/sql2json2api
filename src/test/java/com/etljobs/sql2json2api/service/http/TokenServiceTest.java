@@ -29,6 +29,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
+import com.etljobs.sql2json2api.config.PathsConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import freemarker.template.Configuration;
@@ -41,10 +42,13 @@ class TokenServiceTest {
     private RestTemplate restTemplate;
     
     @Mock
-    private Configuration freemarkerConfiguration;
+    private Configuration freemarkerConfig;
     
     @Mock
     private Template mockTemplate;
+    
+    @Mock
+    private PathsConfig pathsConfig;
     
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -62,10 +66,12 @@ class TokenServiceTest {
         ReflectionTestUtils.setField(tokenService, "username", "testuser");
         ReflectionTestUtils.setField(tokenService, "password", "testpass");
         ReflectionTestUtils.setField(tokenService, "tokenTtlSeconds", 3600L);
-        ReflectionTestUtils.setField(tokenService, "payloadTemplatePath", "auth/auth-payload.ftlh");
         
-        // Mock the template processing
-        when(freemarkerConfiguration.getTemplate(anyString())).thenReturn(mockTemplate);
+        // Mock the PathsConfig
+        when(pathsConfig.getAuthTemplatePath()).thenReturn("auth/auth-payload.ftlh");
+        
+        // Configure le mock pour retourner notre template
+        when(freemarkerConfig.getTemplate(anyString())).thenReturn(mockTemplate);
         
         // Mock the template processing to return a JSON with our expected values
         doAnswer(invocation -> {
@@ -98,7 +104,7 @@ class TokenServiceTest {
         
         // Verify the template was loaded
         try {
-            verify(freemarkerConfiguration).getTemplate("auth/auth-payload.ftlh");
+            verify(freemarkerConfig).getTemplate("auth/auth-payload.ftlh");
         } catch (Exception e) {
             fail("Template loading failed: " + e.getMessage());
         }
@@ -118,16 +124,13 @@ class TokenServiceTest {
         assertTrue(payload.contains("\"context\":\"api\""));
     }
     
-    // Les autres tests existants peuvent rester similaires, avec les vérifications appropriées
-    // des appels à Freemarker...
-    
     @Test
     void generatePayload_ShouldLoadTemplateAndProcessIt() throws Exception {
         // Act
         String result = tokenService.generatePayload();
         
         // Assert
-        verify(freemarkerConfiguration).getTemplate("auth/auth-payload.ftlh");
+        verify(freemarkerConfig).getTemplate("auth/auth-payload.ftlh");
         assertNotNull(result);
         assertEquals("{\"username\":\"testuser\",\"password\":\"testpass\",\"context\":\"api\"}", result);
         

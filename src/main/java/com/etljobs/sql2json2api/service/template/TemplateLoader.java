@@ -3,13 +3,14 @@ package com.etljobs.sql2json2api.service.template;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 
+import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.exception.TemplateProcessingException;
-import com.etljobs.sql2json2api.util.ResourceLoader;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,11 +23,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TemplateLoader {
     
-    @Value("${app.template.directory}")
-    private String templateDirectory;
+    private final PathsConfig pathsConfig;
+    private final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
     
-    @Value("${app.template.use-external-path:false}")
-    private boolean useExternalPath;
+    @Autowired
+    public TemplateLoader(PathsConfig pathsConfig) {
+        this.pathsConfig = pathsConfig;
+    }
     
     /**
      * Charge le contenu d'un template à partir de son nom.
@@ -38,8 +41,8 @@ public class TemplateLoader {
     public String loadTemplateContent(String templateName) {
         try {
             log.debug("Chargement du template: {}", templateName);
-            String path = buildTemplatePath(templateName);
-            Resource resource = ResourceLoader.getResource(path, useExternalPath);
+            String resolvedPath = buildTemplatePath(templateName);
+            Resource resource = resolver.getResource(resolvedPath);
             
             // Vérifier si la ressource existe
             if (!resource.exists()) {
@@ -59,15 +62,15 @@ public class TemplateLoader {
     }
     
     /**
-     * Vérifie si un template existe physiquement dans le classpath.
+     * Vérifie si un template existe physiquement.
      * 
      * @param templateName Le nom du template à vérifier
      * @return true si le template existe, false sinon
      */
     public boolean templateExists(String templateName) {
         try {
-            String path = buildTemplatePath(templateName);
-            Resource resource = ResourceLoader.getResource(path, useExternalPath);
+            String resolvedPath = buildTemplatePath(templateName);
+            Resource resource = resolver.getResource(resolvedPath);
             return resource.exists();
         } catch (Exception e) {
             log.warn("Erreur lors de la vérification de l'existence du template {}: {}", 
@@ -83,6 +86,13 @@ public class TemplateLoader {
      * @return Le chemin complet du template
      */
     public String buildTemplatePath(String templateName) {
-        return templateDirectory + "/" + templateName;
+        String templateDir = pathsConfig.resolvedTemplateDirectory();
+        // Si le chemin résolu inclut déjà le préfixe classpath:, ne pas l'ajouter à nouveau dans le chemin
+        if (templateDir.startsWith("classpath:")) {
+            return templateDir + "/" + templateName;
+        } else {
+            // Dans ce cas, nous utilisons un chemin absolu ou relatif
+            return templateDir + "/" + templateName;
+        }
     }
 }

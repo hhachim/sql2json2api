@@ -6,16 +6,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 
+import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.config.SqlConfig;
 import com.etljobs.sql2json2api.exception.SqlFileException;
 import com.etljobs.sql2json2api.model.SqlFile;
 import com.etljobs.sql2json2api.util.FileUtils;
-import com.etljobs.sql2json2api.util.ResourceLoader;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,14 +25,14 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SqlFileService {
 
-    @Value("${app.sql.directory}")
-    private String sqlDirectory;
-    
-    @Value("${app.sql.use-external-path:false}")
-    private boolean useExternalPath;
+    private final PathsConfig pathsConfig;
+    private final SqlConfig sqlConfig;
 
     @Autowired
-    private SqlConfig sqlConfig;
+    public SqlFileService(PathsConfig pathsConfig, SqlConfig sqlConfig) {
+        this.pathsConfig = pathsConfig;
+        this.sqlConfig = sqlConfig;
+    }
 
     /**
      * Lists all available SQL files in the configured directory.
@@ -44,9 +43,9 @@ public class SqlFileService {
         List<SqlFile> sqlFiles = new ArrayList<>();
 
         try {
-            // Construire le pattern en fonction du type de chemin
-            String locationPattern = sqlDirectory + "/*.sql";
-            Resource[] resources = ResourceLoader.listResources(locationPattern, useExternalPath);
+            // Get all SQL files from the resolved directory
+            String resolvedPath = pathsConfig.resolvedSqlDirectory();
+            Resource[] resources = FileUtils.listResources(resolvedPath + "/*.sql");
 
             for (Resource resource : resources) {
                 String fileName = resource.getFilename();
@@ -69,7 +68,7 @@ public class SqlFileService {
                 }
             }
         } catch (IOException e) {
-            throw new SqlFileException("Failed to list SQL files from directory: " + sqlDirectory, e);
+            throw new SqlFileException("Failed to list SQL files from directory: " + pathsConfig.getSqlDirectory(), e);
         }
 
         return sqlFiles;
@@ -83,14 +82,15 @@ public class SqlFileService {
      */
     public SqlFile readSqlFile(String fileName) {
         try {
-            // Construire le chemin et charger la ressource
-            String path = sqlDirectory + "/" + fileName;
-            Resource resource = ResourceLoader.getResource(path, useExternalPath);
+            // Try to find the resource in the resolved path
+            String resolvedPath = pathsConfig.resolvedSqlDirectory();
+            Resource[] resources = FileUtils.listResources(resolvedPath + "/" + fileName);
             
-            if (!resource.exists()) {
+            if (resources.length == 0) {
                 throw new SqlFileException("SQL file not found: " + fileName);
             }
-
+            
+            Resource resource = resources[0];
             String content = readResourceContent(resource);
             String httpMethod = FileUtils.extractHttpMethod(fileName);
             String baseName = FileUtils.extractBaseName(fileName);
@@ -104,7 +104,7 @@ public class SqlFileService {
                     .templateName(templateName)
                     .build();
 
-        } catch (IOException e) {
+        } catch (IOException | ArrayIndexOutOfBoundsException e) {
             throw new SqlFileException("Failed to read SQL file: " + fileName, e);
         }
     }
