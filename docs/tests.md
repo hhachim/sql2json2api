@@ -1,6 +1,7 @@
 # lancer un test spécifique
 
 ```bash
+./mvnw exec:java -Dexec.mainClass="com.etljobs.sql2json2api.Sql2json2apiApplication" -Dspring.profiles.active=dev
 mvn test -Dtest=TokenServiceTest
 mvn test -Dtest=ProcessOrchestratorTest#processSqlFile_ShouldReadAndExecuteSQL
 ```
