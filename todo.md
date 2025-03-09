@@ -8,3 +8,4 @@
 - [ ] attention à la taille de cette variable : rowErrors (ram)
 - [ ] suuprimer le code inutilisés
 - [ ] refactos iterratifs continues
+- [ ] un api call run dynamique (dev ou prod suivant une variable d'env)
