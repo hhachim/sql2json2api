@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Component
 @Slf4j
-@Profile("api-call-demo")
+@Profile({"api-call-demo","dev"})
 public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
     
     private final SqlFileService sqlFileService;
