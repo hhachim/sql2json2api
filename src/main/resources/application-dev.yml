@@ -19,6 +19,12 @@ spring:
 app:
   sql:
     directory: sql
+    # Liste des fichiers SQL à exécuter dans l'ordre spécifié
+    # Si la liste est vide, tous les fichiers sont exécutés
+    execution-order:
+      - "GET_users.sql"
+      - "POST_order.sql"
+      - "TEST_httpbin.sql"
   template:
     directory: templates/json
   batch:
