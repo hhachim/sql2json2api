@@ -1,14 +1,13 @@
 package com.etljobs.sql2json2api.service.template;
 
-import java.io.IOException;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
 import com.etljobs.sql2json2api.model.SqlFile;
+import com.etljobs.sql2json2api.util.ResourceLoader;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,8 +26,8 @@ public class TemplateFinder {
     @Value("${app.template.directory}")
     private String templateDirectory;
     
-    // Le rendre protected pour les tests
-    protected PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+    @Value("${app.template.use-external-path:false}")
+    private boolean useExternalPath;
     
     /**
      * Trouve le template correspondant à un fichier SQL.
@@ -75,14 +74,16 @@ public class TemplateFinder {
     public boolean templateExists(String templateName) {
         try {
             String templatePath = templateDirectory + "/" + templateName;
-            Resource[] resources = resolver.getResources("classpath:" + templatePath);
-            return resources.length > 0 && resources[0].exists();
-        } catch (IOException e) {
+            Resource resource = ResourceLoader.getResource(templatePath, useExternalPath);
+            return resource.exists();
+        } catch (Exception e) {
             log.warn("Erreur lors de la vérification de l'existence du template {}: {}", 
                     templateName, e.getMessage());
             return false;
         }
     }
+    
+    // Autres méthodes existantes restent inchangées...
     
     /**
      * Méthode alternative qui trouve un template en utilisant des règles plus flexibles

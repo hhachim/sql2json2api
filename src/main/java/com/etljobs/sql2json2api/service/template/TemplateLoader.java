@@ -4,12 +4,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 
 import com.etljobs.sql2json2api.exception.TemplateProcessingException;
+import com.etljobs.sql2json2api.util.ResourceLoader;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,6 +25,9 @@ public class TemplateLoader {
     @Value("${app.template.directory}")
     private String templateDirectory;
     
+    @Value("${app.template.use-external-path:false}")
+    private boolean useExternalPath;
+    
     /**
      * Charge le contenu d'un template à partir de son nom.
      * 
@@ -35,7 +38,8 @@ public class TemplateLoader {
     public String loadTemplateContent(String templateName) {
         try {
             log.debug("Chargement du template: {}", templateName);
-            Resource resource = new ClassPathResource(buildTemplatePath(templateName));
+            String path = buildTemplatePath(templateName);
+            Resource resource = ResourceLoader.getResource(path, useExternalPath);
             
             // Vérifier si la ressource existe
             if (!resource.exists()) {
@@ -62,7 +66,8 @@ public class TemplateLoader {
      */
     public boolean templateExists(String templateName) {
         try {
-            Resource resource = new ClassPathResource(buildTemplatePath(templateName));
+            String path = buildTemplatePath(templateName);
+            Resource resource = ResourceLoader.getResource(path, useExternalPath);
             return resource.exists();
         } catch (Exception e) {
             log.warn("Erreur lors de la vérification de l'existence du template {}: {}", 

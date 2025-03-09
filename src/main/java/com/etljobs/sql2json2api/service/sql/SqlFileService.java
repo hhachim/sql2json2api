@@ -15,6 +15,7 @@ import com.etljobs.sql2json2api.config.SqlConfig;
 import com.etljobs.sql2json2api.exception.SqlFileException;
 import com.etljobs.sql2json2api.model.SqlFile;
 import com.etljobs.sql2json2api.util.FileUtils;
+import com.etljobs.sql2json2api.util.ResourceLoader;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,6 +28,9 @@ public class SqlFileService {
 
     @Value("${app.sql.directory}")
     private String sqlDirectory;
+    
+    @Value("${app.sql.use-external-path:false}")
+    private boolean useExternalPath;
 
     @Autowired
     private SqlConfig sqlConfig;
@@ -40,8 +44,9 @@ public class SqlFileService {
         List<SqlFile> sqlFiles = new ArrayList<>();
 
         try {
-            // Get all SQL files from the classpath directory
-            Resource[] resources = FileUtils.listResources("classpath:" + sqlDirectory + "/*.sql");
+            // Construire le pattern en fonction du type de chemin
+            String locationPattern = sqlDirectory + "/*.sql";
+            Resource[] resources = ResourceLoader.listResources(locationPattern, useExternalPath);
 
             for (Resource resource : resources) {
                 String fileName = resource.getFilename();
@@ -78,8 +83,13 @@ public class SqlFileService {
      */
     public SqlFile readSqlFile(String fileName) {
         try {
-            // Try to find the resource in the classpath
-            Resource resource = FileUtils.listResources("classpath:" + sqlDirectory + "/" + fileName)[0];
+            // Construire le chemin et charger la ressource
+            String path = sqlDirectory + "/" + fileName;
+            Resource resource = ResourceLoader.getResource(path, useExternalPath);
+            
+            if (!resource.exists()) {
+                throw new SqlFileException("SQL file not found: " + fileName);
+            }
 
             String content = readResourceContent(resource);
             String httpMethod = FileUtils.extractHttpMethod(fileName);
@@ -94,7 +104,7 @@ public class SqlFileService {
                     .templateName(templateName)
                     .build();
 
-        } catch (IOException | ArrayIndexOutOfBoundsException e) {
+        } catch (IOException e) {
             throw new SqlFileException("Failed to read SQL file: " + fileName, e);
         }
     }
