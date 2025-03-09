@@ -9,3 +9,5 @@
 - [ ] suuprimer le code inutilisés
 - [ ] refactos iterratifs continues
 - [ ] un api call run dynamique (dev ou prod suivant une variable d'env)
+- [ ] header par defaut : {"Content-Type": "application/json", "Accept": "application/json"}
+- [ ] autoriser une nomenclature sans casse des fichiers sql et templates
