@@ -56,8 +56,8 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
         try {
             log.info("=== API Call Demo ===");
 
-            // Récupérer tous les fichiers SQL
-            List<SqlFile> sqlFiles = sqlFileService.listSqlFiles();
+            // Récupérer les fichiers SQL dans l'ordre configuré
+            List<SqlFile> sqlFiles = sqlFileService.getSqlFilesInConfiguredOrder();
             if (sqlFiles.isEmpty()) {
                 log.warn("No SQL files found");
                 return;
@@ -86,7 +86,7 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
                 // Process results and make API calls
                 List<ApiResponse> responses = new ArrayList<>();
 
-                // Process only the first 2 results for demo purposes (ou plus si nécessaire)
+                // Process only the first 2 results for demo purposes
                 int rowsToProcess = Math.min(2, results.size());
                 for (int i = 0; i < rowsToProcess; i++) {
                     Map<String, Object> row = results.get(i);

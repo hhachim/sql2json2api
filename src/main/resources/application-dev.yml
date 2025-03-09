@@ -24,6 +24,7 @@ app:
     execution-order:
       - "GET_users.sql"
       - "POST_order.sql"
+      - "GET_toto_non_existant.sql"
       - "TEST_httpbin.sql"
   template:
     directory: templates/json
