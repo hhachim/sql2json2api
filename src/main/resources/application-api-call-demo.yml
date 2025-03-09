@@ -36,6 +36,7 @@ api:
     token-ttl: 3600
     # Chemin vers le template d'authentification
     payload-template-path: auth/auth-payload.ftlh
+  base-url: http://api-celio.127.0.0.1.traefik.me # URL de base pour les appels API
 
 logging:
   level:
