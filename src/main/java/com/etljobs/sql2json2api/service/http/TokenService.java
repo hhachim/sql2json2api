@@ -1,6 +1,9 @@
 package com.etljobs.sql2json2api.service.http;
 
 import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -18,6 +21,7 @@ import org.springframework.web.client.RestTemplate;
 
 import com.etljobs.sql2json2api.exception.ApiCallException;
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
+import com.etljobs.sql2json2api.util.FileUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -66,17 +70,35 @@ public class TokenService {
      * @throws Exception Si une erreur survient lors du traitement du template
      */
     protected String generatePayload() throws Exception {
-        // Charger le template depuis le chemin configuré
-        Template template = freemarkerConfiguration.getTemplate(payloadTemplatePath);
-        
         // Préparer le modèle de données pour Freemarker
         Map<String, Object> dataModel = new HashMap<>();
         dataModel.put("username", username);
         dataModel.put("password", password);
         
-        // Traiter le template
         StringWriter writer = new StringWriter();
-        template.process(dataModel, writer);
+        
+        // Vérifier si le chemin du template est absolu
+        if (FileUtils.isAbsolutePath(payloadTemplatePath)) {
+            // Utiliser le système de fichiers pour charger le template
+            log.debug("Chargement du template d'authentification depuis le chemin absolu: {}", payloadTemplatePath);
+            Path templatePath = Paths.get(payloadTemplatePath);
+            
+            if (!Files.exists(templatePath)) {
+                throw new ApiCallException("Le template d'authentification n'existe pas: " + payloadTemplatePath);
+            }
+            
+            // Charger et parser le contenu du template directement
+            String templateContent = FileUtils.readFileContent(templatePath);
+            Template template = new Template("auth-template", templateContent, freemarkerConfiguration);
+            
+            // Traiter le template
+            template.process(dataModel, writer);
+        } else {
+            // Comportement original : utiliser le ClassLoader de Freemarker
+            log.debug("Chargement du template d'authentification depuis le classpath: {}", payloadTemplatePath);
+            Template template = freemarkerConfiguration.getTemplate(payloadTemplatePath);
+            template.process(dataModel, writer);
+        }
         
         return writer.toString();
     }
