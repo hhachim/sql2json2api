@@ -24,7 +24,7 @@ public class FreemarkerConfig {
      * 
      * @return Configured Freemarker Configuration
      */
-    @Bean
+    @Bean(name = "freemarkerConfiguration")
     public freemarker.template.Configuration freemarkerConfiguration() {
         freemarker.template.Configuration configuration = new freemarker.template.Configuration(freemarker.template.Configuration.VERSION_2_3_32);
         

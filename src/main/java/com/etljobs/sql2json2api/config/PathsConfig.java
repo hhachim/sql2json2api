@@ -44,7 +44,8 @@ public class PathsConfig {
                 return path; // Chemin absolu, utilisé tel quel
             case "relative":
                 // Si spring.config.location est défini, le préfixer
-                String configLocation = System.getProperty("spring.config.location", "");
+                String configLocation = System.getProperty("spring.config.location", "");//TODO
+                //configLocation = "/Users/hachimhassani/projects/etljobs/sql2json2api/usecasesConfig/am";
                 if (!configLocation.isEmpty() && !configLocation.endsWith("/")) {
                     configLocation += "/";
                 }

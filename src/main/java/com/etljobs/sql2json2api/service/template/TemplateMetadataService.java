@@ -1,11 +1,11 @@
 package com.etljobs.sql2json2api.service.template;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +27,7 @@ public class TemplateMetadataService {
     private static final Pattern METADATA_PATTERN = Pattern.compile("@api-(\\w+):\\s*([^@]*?)(?=\\s*-->|\\s*@api-|\\s*$)", Pattern.DOTALL);
     private final ObjectMapper objectMapper;
     
+    @Autowired
     public TemplateMetadataService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
