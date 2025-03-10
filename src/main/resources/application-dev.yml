@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3360/sql2json2api?useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3360/api-celio?useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -28,7 +28,7 @@ app:
       # - "TEST_httpbin.sql"
       - "POST_product_groups.sql"
   template:
-    directory: templates/json
+    directory: /Users/hachimhassani/projects/etljobs/sql2json2api/usecasesConfig/am/templates/json
   batch:
     size: 10
     delay: 500

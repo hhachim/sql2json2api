@@ -1,14 +1,19 @@
 package com.etljobs.sql2json2api.service.template;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
 import com.etljobs.sql2json2api.model.SqlFile;
+import com.etljobs.sql2json2api.util.FileUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,7 +33,8 @@ public class TemplateFinder {
     private String templateDirectory;
     
     // Le rendre protected pour les tests
-    protected PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+    protected org.springframework.core.io.support.PathMatchingResourcePatternResolver resolver = 
+            new org.springframework.core.io.support.PathMatchingResourcePatternResolver();
     
     /**
      * Trouve le template correspondant à un fichier SQL.
@@ -74,9 +80,17 @@ public class TemplateFinder {
      */
     public boolean templateExists(String templateName) {
         try {
-            String templatePath = templateDirectory + "/" + templateName;
-            Resource[] resources = resolver.getResources("classpath:" + templatePath);
-            return resources.length > 0 && resources[0].exists();
+            // Vérifier si le répertoire de templates est un chemin absolu
+            if (FileUtils.isAbsolutePath(templateDirectory)) {
+                // Utiliser le système de fichiers pour vérifier l'existence
+                Path templatePath = Paths.get(templateDirectory, templateName);
+                return Files.exists(templatePath) && !Files.isDirectory(templatePath);
+            } else {
+                // Utiliser le classpath pour vérifier l'existence
+                String templatePath = templateDirectory + "/" + templateName;
+                Resource[] resources = resolver.getResources("classpath:" + templatePath);
+                return resources.length > 0 && resources[0].exists();
+            }
         } catch (IOException e) {
             log.warn("Erreur lors de la vérification de l'existence du template {}: {}", 
                     templateName, e.getMessage());
@@ -146,5 +160,40 @@ public class TemplateFinder {
         
         // Si pas trouvé, essayer les règles alternatives
         return findAlternativeTemplate(sqlFile);
+    }
+    
+    /**
+     * Liste tous les templates dans le répertoire configuré.
+     * Utile pour le débogage et les tests.
+     * 
+     * @return Liste des noms de templates disponibles
+     */
+    public List<String> listAvailableTemplates() {
+        try {
+            // Vérifier si le répertoire de templates est un chemin absolu
+            if (FileUtils.isAbsolutePath(templateDirectory)) {
+                // Lister les fichiers du système de fichiers
+                Path dir = Paths.get(templateDirectory);
+                if (!Files.exists(dir) || !Files.isDirectory(dir)) {
+                    log.warn("Le répertoire de templates n'existe pas ou n'est pas un répertoire: {}", templateDirectory);
+                    return List.of();
+                }
+                
+                return Files.walk(dir, 1)
+                        .filter(Files::isRegularFile)
+                        .filter(p -> p.toString().toLowerCase().endsWith(".ftlh"))
+                        .map(p -> p.getFileName().toString())
+                        .collect(Collectors.toList());
+            } else {
+                // Lister les ressources du classpath
+                Resource[] resources = resolver.getResources("classpath:" + templateDirectory + "/*.ftlh");
+                return List.of(resources).stream()
+                        .map(Resource::getFilename)
+                        .collect(Collectors.toList());
+            }
+        } catch (IOException e) {
+            log.warn("Erreur lors du listage des templates: {}", e.getMessage());
+            return List.of();
+        }
     }
 }
