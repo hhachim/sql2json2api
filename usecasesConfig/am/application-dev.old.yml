@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3360/sql2json2api?useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3360/api-celio?useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -17,33 +17,40 @@ spring:
       mode: always
 
 app:
+  paths:
+    # Mode de résolution des chemins: classpath, absolute, relative 
+    resolution-mode: relative
+    # Chemin des fichiers SQL
+    sql-directory: sql
+    # Chemin des templates Freemarker
+    template-directory: templates/json
+    # Chemin du template d'authentification
+    auth-template-path: templates/auth/auth-payload.ftlh
+  
+  # Configuration des requêtes SQL
   sql:
-    directory: /Users/hachimhassani/projects/etljobs/sql2json2api/usecasesConfig/am/sql
     # Liste des fichiers SQL à exécuter dans l'ordre spécifié
-    # Si la liste est vide, tous les fichiers sont exécutés
     execution-order:
-      # - "GET_users.sql"
-      # - "POST_order.sql"
-      # - "GET_toto_non_existant.sql"
-      # - "TEST_httpbin.sql"
       - "POST_product_groups.sql"
-  template:
-    directory: templates/json
+  
+  # Configuration des traitements par lot
   batch:
     size: 10
     delay: 500
+  
+  # Configuration des réessais
   retry:
-    max-attempts: 3        # Nombre maximum de tentatives
-    delay-ms: 2000         # Délai initial entre les tentatives (ms)
-    backoff-multiplier: 1.5 # Multiplicateur pour le délai entre les tentatives
+    max-attempts: 3
+    delay-ms: 2000
+    backoff-multiplier: 1.5
+
+# Configuration API
 api:
   auth:
     url: http://api-celio.127.0.0.1.traefik.me/api/authenticate
     username: admin_api
     password: gnDLta18o53x+4+/+MH/R/jX06V
-    token-ttl: 1 # 3600
-    # Chemin vers le template d'authentification
-    payload-template-path: auth/auth-payload.ftlh
+    token-ttl: 1 # 3600 en production
   base-url: http://api-celio.127.0.0.1.traefik.me # URL de base pour les appels API
 
 logging:

@@ -1,8 +1,15 @@
 package com.etljobs.sql2json2api.util;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -85,5 +92,57 @@ public class FileUtils {
     public static Resource[] listResources(String locationPattern) throws IOException {
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         return resolver.getResources(locationPattern);
+    }
+    
+    /**
+     * Determines if a path is absolute.
+     * 
+     * @param path The path to check
+     * @return true if the path is absolute, false otherwise
+     */
+    public static boolean isAbsolutePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return false;
+        }
+        
+        // Check for Windows absolute path (starts with drive letter followed by colon)
+        if (path.length() >= 2 && Character.isLetter(path.charAt(0)) && path.charAt(1) == ':') {
+            return true;
+        }
+        
+        // Check for Unix absolute path (starts with forward slash)
+        return path.startsWith("/");
+    }
+    
+    /**
+     * Lists all SQL files in a directory on the file system.
+     * 
+     * @param directoryPath The absolute path of the directory
+     * @return A list of file paths that have a .sql extension
+     * @throws IOException If an I/O error occurs
+     */
+    public static List<Path> listSqlFilesFromFileSystem(String directoryPath) throws IOException {
+        Path dir = Paths.get(directoryPath);
+        if (!Files.exists(dir) || !Files.isDirectory(dir)) {
+            throw new IOException("Directory does not exist or is not a directory: " + directoryPath);
+        }
+        
+        try (Stream<Path> paths = Files.walk(dir, 1)) {
+            return paths
+                .filter(path -> !Files.isDirectory(path))
+                .filter(path -> path.toString().toLowerCase().endsWith(".sql"))
+                .collect(Collectors.toList());
+        }
+    }
+    
+    /**
+     * Reads the content of a file from the file system.
+     * 
+     * @param filePath The path of the file to read
+     * @return The content of the file as a string
+     * @throws IOException If an I/O error occurs
+     */
+    public static String readFileContent(Path filePath) throws IOException {
+        return new String(Files.readAllBytes(filePath), StandardCharsets.UTF_8);
     }
 }

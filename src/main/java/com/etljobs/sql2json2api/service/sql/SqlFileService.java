@@ -2,6 +2,9 @@ package com.etljobs.sql2json2api.service.sql;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,13 +43,14 @@ public class SqlFileService {
         List<SqlFile> sqlFiles = new ArrayList<>();
 
         try {
-            // Get all SQL files from the classpath directory
-            Resource[] resources = FileUtils.listResources("classpath:" + sqlDirectory + "/*.sql");
-
-            for (Resource resource : resources) {
-                String fileName = resource.getFilename();
-                if (fileName != null) {
-                    String content = readResourceContent(resource);
+            if (FileUtils.isAbsolutePath(sqlDirectory)) {
+                // Handle absolute path using file system operations
+                log.debug("Using file system to read SQL files from absolute path: {}", sqlDirectory);
+                List<Path> sqlFilePaths = FileUtils.listSqlFilesFromFileSystem(sqlDirectory);
+                
+                for (Path filePath : sqlFilePaths) {
+                    String fileName = filePath.getFileName().toString();
+                    String content = FileUtils.readFileContent(filePath);
                     String httpMethod = FileUtils.extractHttpMethod(fileName);
                     String baseName = FileUtils.extractBaseName(fileName);
                     String templateName = FileUtils.getTemplateNameForSqlFile(fileName);
@@ -61,6 +65,31 @@ public class SqlFileService {
 
                     sqlFiles.add(sqlFile);
                     log.debug("Found SQL file: {}", fileName);
+                }
+            } else {
+                // Original behavior: handle classpath resources
+                log.debug("Using classpath to read SQL files from: {}", sqlDirectory);
+                Resource[] resources = FileUtils.listResources("classpath:" + sqlDirectory + "/*.sql");
+
+                for (Resource resource : resources) {
+                    String fileName = resource.getFilename();
+                    if (fileName != null) {
+                        String content = readResourceContent(resource);
+                        String httpMethod = FileUtils.extractHttpMethod(fileName);
+                        String baseName = FileUtils.extractBaseName(fileName);
+                        String templateName = FileUtils.getTemplateNameForSqlFile(fileName);
+
+                        SqlFile sqlFile = SqlFile.builder()
+                                .fileName(fileName)
+                                .content(content)
+                                .httpMethod(httpMethod)
+                                .baseName(baseName)
+                                .templateName(templateName)
+                                .build();
+
+                        sqlFiles.add(sqlFile);
+                        log.debug("Found SQL file: {}", fileName);
+                    }
                 }
             }
         } catch (IOException e) {
@@ -78,10 +107,21 @@ public class SqlFileService {
      */
     public SqlFile readSqlFile(String fileName) {
         try {
-            // Try to find the resource in the classpath
-            Resource resource = FileUtils.listResources("classpath:" + sqlDirectory + "/" + fileName)[0];
-
-            String content = readResourceContent(resource);
+            String content;
+            
+            if (FileUtils.isAbsolutePath(sqlDirectory)) {
+                // Handle absolute path using file system operations
+                Path filePath = Paths.get(sqlDirectory, fileName);
+                if (!Files.exists(filePath)) {
+                    throw new SqlFileException("SQL file not found: " + filePath);
+                }
+                content = FileUtils.readFileContent(filePath);
+            } else {
+                // Original behavior: handle classpath resources
+                Resource resource = FileUtils.listResources("classpath:" + sqlDirectory + "/" + fileName)[0];
+                content = readResourceContent(resource);
+            }
+            
             String httpMethod = FileUtils.extractHttpMethod(fileName);
             String baseName = FileUtils.extractBaseName(fileName);
             String templateName = FileUtils.getTemplateNameForSqlFile(fileName);

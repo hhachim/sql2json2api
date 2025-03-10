@@ -18,7 +18,7 @@ spring:
 
 app:
   sql:
-    directory: /Users/hachimhassani/projects/etljobs/sql2json2api/usecasesConfig/am/sql
+    directory: sql
     # Liste des fichiers SQL à exécuter dans l'ordre spécifié
     # Si la liste est vide, tous les fichiers sont exécutés
     execution-order:
