@@ -1,15 +1,17 @@
 package com.etljobs.sql2json2api.service.template;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
-import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.model.SqlFile;
+import com.etljobs.sql2json2api.util.PathResolver;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,15 +27,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TemplateFinder {
     
-    private final PathsConfig pathsConfig;
+    @Value("${app.template.directory}")
+    private String templateDirectory;
+    
+    @Value("${app.template.external-directory:}")
+    private String externalTemplateDirectory;
+    
+    @Autowired
+    private PathResolver pathResolver;
     
     // Le rendre protected pour les tests
     protected PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-    
-    @Autowired
-    public TemplateFinder(PathsConfig pathsConfig) {
-        this.pathsConfig = pathsConfig;
-    }
     
     /**
      * Trouve le template correspondant à un fichier SQL.
@@ -78,9 +82,22 @@ public class TemplateFinder {
      * @return true si le template existe, false sinon
      */
     public boolean templateExists(String templateName) {
+        // Résoudre le chemin externe s'il est spécifié
+        String resolvedExternalDir = pathResolver.resolvePath(externalTemplateDirectory);
+        
+        // First check external directory if configured
+        if (resolvedExternalDir != null && !resolvedExternalDir.isEmpty()) {
+            File file = new File(resolvedExternalDir, templateName);
+            if (file.exists() && file.isFile()) {
+                log.debug("Template trouvé dans le répertoire externe: {}", templateName);
+                return true;
+            }
+        }
+        
+        // Then check classpath
         try {
-            String resolvedPath = pathsConfig.resolvedTemplateDirectory() + "/" + templateName;
-            Resource[] resources = resolver.getResources(resolvedPath);
+            String templatePath = templateDirectory + "/" + templateName;
+            Resource[] resources = resolver.getResources("classpath:" + templatePath);
             return resources.length > 0 && resources[0].exists();
         } catch (IOException e) {
             log.warn("Erreur lors de la vérification de l'existence du template {}: {}", 

@@ -1,5 +1,7 @@
 package com.etljobs.sql2json2api.service.http;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.StringWriter;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,9 +18,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.exception.ApiCallException;
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
+import com.etljobs.sql2json2api.util.PathResolver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -26,6 +28,9 @@ import freemarker.template.Configuration;
 import freemarker.template.Template;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Service pour gérer l'authentification et les tokens.
+ */
 @Service
 @Slf4j
 public class TokenService {
@@ -42,10 +47,16 @@ public class TokenService {
     @Value("${api.auth.token-ttl:3600}")
     private long tokenTtlSeconds;
     
+    @Value("${api.auth.payload-template-path:auth/auth-payload.ftlh}")
+    private String payloadTemplatePath;
+    
+    @Value("${api.auth.external-payload-template-path:}")
+    private String externalPayloadTemplatePath;
+    
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final Configuration freemarkerConfiguration;
-    private final PathsConfig pathsConfig;
+    private final PathResolver pathResolver;
     
     private String cachedToken;
     private Instant tokenExpiration;
@@ -55,11 +66,11 @@ public class TokenService {
             RestTemplate restTemplate, 
             ObjectMapper objectMapper, 
             @Qualifier("freemarkerConfiguration") Configuration freemarkerConfiguration,
-            PathsConfig pathsConfig) {
+            PathResolver pathResolver) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.freemarkerConfiguration = freemarkerConfiguration;
-        this.pathsConfig = pathsConfig;
+        this.pathResolver = pathResolver;
     }
 
     /**
@@ -69,14 +80,39 @@ public class TokenService {
      * @throws Exception Si une erreur survient lors du traitement du template
      */
     protected String generatePayload() throws Exception {
-        // Charger le template depuis le chemin configuré
-        // Le chemin doit être relatif au templateDirectory configuré dans FreemarkerConfiguration
-        // et non un chemin complet résolu
-        String templatePath = pathsConfig.getAuthTemplatePath();
+        Template template;
         
-        // Pour assurer la compatibilité, on utilise le chemin relatif tel quel
-        // La configuration de freemarker s'occupe de résoudre le chemin
-        Template template = freemarkerConfiguration.getTemplate(templatePath);
+        // Résoudre le chemin externe s'il est spécifié
+        String resolvedExternalPath = pathResolver.resolvePath(externalPayloadTemplatePath);
+        
+        // First try to load from external path if configured
+        if (resolvedExternalPath != null && !resolvedExternalPath.isEmpty()) {
+            try {
+                File file = new File(resolvedExternalPath);
+                
+                if (file.exists() && file.isFile()) {
+                    log.debug("Using external auth template: {}", resolvedExternalPath);
+                    
+                    // Create a temporary configuration to load this specific file
+                    Configuration tempConfig = new Configuration(Configuration.VERSION_2_3_32);
+                    tempConfig.setDirectoryForTemplateLoading(file.getParentFile());
+                    tempConfig.setDefaultEncoding("UTF-8");
+                    
+                    template = tempConfig.getTemplate(file.getName());
+                } else {
+                    log.warn("External auth template not found: {}, falling back to classpath", resolvedExternalPath);
+                    template = freemarkerConfiguration.getTemplate(payloadTemplatePath);
+                }
+            } catch (IOException e) {
+                log.warn("Failed to load external auth template: {}, falling back to classpath", 
+                        resolvedExternalPath, e);
+                template = freemarkerConfiguration.getTemplate(payloadTemplatePath);
+            }
+        } else {
+            // Use the standard freemarker configuration
+            log.debug("Using classpath auth template: {}", payloadTemplatePath);
+            template = freemarkerConfiguration.getTemplate(payloadTemplatePath);
+        }
         
         // Préparer le modèle de données pour Freemarker
         Map<String, Object> dataModel = new HashMap<>();

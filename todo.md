@@ -13,6 +13,7 @@
 - [ ] autoriser une nomenclature sans casse des fichiers sql et templates
 - [ ] conf destination de log, avec rotation
 - [ ] rendre les ressources relatif à spring.config.location (par exemple au lieu de use-external-path: false, avoir path_type:absolut,classpath,relative_to_spring.config.location)
+- [ ] nettoyage des classs, config inutilisés
 # Backlog
 
 - [ ] versions ultérieurs : pouvoir alimenter un template via plusieurs sql

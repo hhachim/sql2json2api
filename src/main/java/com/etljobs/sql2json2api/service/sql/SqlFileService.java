@@ -1,20 +1,23 @@
 package com.etljobs.sql2json2api.service.sql;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 
-import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.config.SqlConfig;
 import com.etljobs.sql2json2api.exception.SqlFileException;
 import com.etljobs.sql2json2api.model.SqlFile;
 import com.etljobs.sql2json2api.util.FileUtils;
+import com.etljobs.sql2json2api.util.PathResolver;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,14 +28,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SqlFileService {
 
-    private final PathsConfig pathsConfig;
-    private final SqlConfig sqlConfig;
+    @Value("${app.sql.directory}")
+    private String sqlDirectory;
+    
+    @Value("${app.sql.external-directory:}")
+    private String externalSqlDirectory;
 
     @Autowired
-    public SqlFileService(PathsConfig pathsConfig, SqlConfig sqlConfig) {
-        this.pathsConfig = pathsConfig;
-        this.sqlConfig = sqlConfig;
-    }
+    private SqlConfig sqlConfig;
+    
+    @Autowired
+    private PathResolver pathResolver;
 
     /**
      * Lists all available SQL files in the configured directory.
@@ -43,9 +49,44 @@ public class SqlFileService {
         List<SqlFile> sqlFiles = new ArrayList<>();
 
         try {
-            // Get all SQL files from the resolved directory
-            String resolvedPath = pathsConfig.resolvedSqlDirectory();
-            Resource[] resources = FileUtils.listResources(resolvedPath + "/*.sql");
+            // Résoudre le chemin externe s'il est spécifié
+            String resolvedExternalDir = pathResolver.resolvePath(externalSqlDirectory);
+            
+            // First try to load from external directory if configured
+            if (resolvedExternalDir != null && !resolvedExternalDir.isEmpty()) {
+                File directory = new File(resolvedExternalDir);
+                if (directory.exists() && directory.isDirectory()) {
+                    log.info("Loading SQL files from external directory: {}", resolvedExternalDir);
+                    File[] files = directory.listFiles((dir, name) -> name.toLowerCase().endsWith(".sql"));
+                    if (files != null) {
+                        for (File file : files) {
+                            String fileName = file.getName();
+                            String content = Files.readString(file.toPath());
+                            String httpMethod = FileUtils.extractHttpMethod(fileName);
+                            String baseName = FileUtils.extractBaseName(fileName);
+                            String templateName = FileUtils.getTemplateNameForSqlFile(fileName);
+
+                            SqlFile sqlFile = SqlFile.builder()
+                                    .fileName(fileName)
+                                    .content(content)
+                                    .httpMethod(httpMethod)
+                                    .baseName(baseName)
+                                    .templateName(templateName)
+                                    .build();
+
+                            sqlFiles.add(sqlFile);
+                            log.debug("Found SQL file in external directory: {}", fileName);
+                        }
+                    }
+                    return sqlFiles; // Return early if external files were loaded
+                } else {
+                    log.warn("External SQL directory does not exist or is not a directory: {}", resolvedExternalDir);
+                }
+            }
+            
+            // Fall back to classpath loading if external loading failed or not configured
+            log.info("Loading SQL files from classpath directory: {}", sqlDirectory);
+            Resource[] resources = FileUtils.listResources("classpath:" + sqlDirectory + "/*.sql");
 
             for (Resource resource : resources) {
                 String fileName = resource.getFilename();
@@ -64,11 +105,11 @@ public class SqlFileService {
                             .build();
 
                     sqlFiles.add(sqlFile);
-                    log.debug("Found SQL file: {}", fileName);
+                    log.debug("Found SQL file in classpath: {}", fileName);
                 }
             }
         } catch (IOException e) {
-            throw new SqlFileException("Failed to list SQL files from directory: " + pathsConfig.getSqlDirectory(), e);
+            throw new SqlFileException("Failed to list SQL files", e);
         }
 
         return sqlFiles;
@@ -81,16 +122,39 @@ public class SqlFileService {
      * @return The SqlFile object with content and metadata
      */
     public SqlFile readSqlFile(String fileName) {
-        try {
-            // Try to find the resource in the resolved path
-            String resolvedPath = pathsConfig.resolvedSqlDirectory();
-            Resource[] resources = FileUtils.listResources(resolvedPath + "/" + fileName);
-            
-            if (resources.length == 0) {
-                throw new SqlFileException("SQL file not found: " + fileName);
+        // Résoudre le chemin externe s'il est spécifié
+        String resolvedExternalDir = pathResolver.resolvePath(externalSqlDirectory);
+        
+        // First try external directory if configured
+        if (resolvedExternalDir != null && !resolvedExternalDir.isEmpty()) {
+            File file = new File(resolvedExternalDir, fileName);
+            if (file.exists() && file.isFile()) {
+                try {
+                    log.debug("Reading SQL file from external directory: {}", fileName);
+                    String content = Files.readString(file.toPath());
+                    String httpMethod = FileUtils.extractHttpMethod(fileName);
+                    String baseName = FileUtils.extractBaseName(fileName);
+                    String templateName = FileUtils.getTemplateNameForSqlFile(fileName);
+
+                    return SqlFile.builder()
+                            .fileName(fileName)
+                            .content(content)
+                            .httpMethod(httpMethod)
+                            .baseName(baseName)
+                            .templateName(templateName)
+                            .build();
+                } catch (IOException e) {
+                    log.warn("Failed to read external SQL file: {}", fileName, e);
+                    // Fall through to try classpath instead
+                }
             }
-            
-            Resource resource = resources[0];
+        }
+        
+        // Fall back to classpath
+        try {
+            log.debug("Reading SQL file from classpath: {}", fileName);
+            Resource resource = FileUtils.listResources("classpath:" + sqlDirectory + "/" + fileName)[0];
+
             String content = readResourceContent(resource);
             String httpMethod = FileUtils.extractHttpMethod(fileName);
             String baseName = FileUtils.extractBaseName(fileName);

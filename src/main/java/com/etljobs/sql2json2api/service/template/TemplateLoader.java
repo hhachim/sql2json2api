@@ -1,16 +1,19 @@
 package com.etljobs.sql2json2api.service.template;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 
-import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.exception.TemplateProcessingException;
+import com.etljobs.sql2json2api.util.PathResolver;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,13 +26,14 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TemplateLoader {
     
-    private final PathsConfig pathsConfig;
-    private final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+    @Value("${app.template.directory}")
+    private String templateDirectory;
+    
+    @Value("${app.template.external-directory:}")
+    private String externalTemplateDirectory;
     
     @Autowired
-    public TemplateLoader(PathsConfig pathsConfig) {
-        this.pathsConfig = pathsConfig;
-    }
+    private PathResolver pathResolver;
     
     /**
      * Charge le contenu d'un template à partir de son nom.
@@ -39,10 +43,27 @@ public class TemplateLoader {
      * @throws TemplateProcessingException Si le template ne peut pas être chargé
      */
     public String loadTemplateContent(String templateName) {
+        // Résoudre le chemin externe s'il est spécifié
+        String resolvedExternalDir = pathResolver.resolvePath(externalTemplateDirectory);
+        
+        // First try to load from external directory if configured
+        if (resolvedExternalDir != null && !resolvedExternalDir.isEmpty()) {
+            File file = new File(resolvedExternalDir, templateName);
+            if (file.exists() && file.isFile()) {
+                try {
+                    log.debug("Loading template from external directory: {}", templateName);
+                    return Files.readString(file.toPath(), StandardCharsets.UTF_8);
+                } catch (IOException e) {
+                    log.warn("Failed to read external template: {}", templateName, e);
+                    // Fall through to try classpath
+                }
+            }
+        }
+        
+        // Fall back to classpath
         try {
-            log.debug("Chargement du template: {}", templateName);
-            String resolvedPath = buildTemplatePath(templateName);
-            Resource resource = resolver.getResource(resolvedPath);
+            log.debug("Loading template from classpath: {}", templateName);
+            Resource resource = new ClassPathResource(buildTemplatePath(templateName));
             
             // Vérifier si la ressource existe
             if (!resource.exists()) {
@@ -53,7 +74,7 @@ public class TemplateLoader {
             byte[] bytes = FileCopyUtils.copyToByteArray(resource.getInputStream());
             String content = new String(bytes, StandardCharsets.UTF_8);
             
-            log.debug("Template chargé avec succès, taille: {} octets", content.length());
+            log.debug("Template loaded successfully, size: {} bytes", content.length());
             return content;
             
         } catch (IOException e) {
@@ -68,13 +89,23 @@ public class TemplateLoader {
      * @return true si le template existe, false sinon
      */
     public boolean templateExists(String templateName) {
+        // Résoudre le chemin externe s'il est spécifié
+        String resolvedExternalDir = pathResolver.resolvePath(externalTemplateDirectory);
+        
+        // First check external directory if configured
+        if (resolvedExternalDir != null && !resolvedExternalDir.isEmpty()) {
+            File file = new File(resolvedExternalDir, templateName);
+            if (file.exists() && file.isFile()) {
+                return true;
+            }
+        }
+        
+        // Then check classpath
         try {
-            String resolvedPath = buildTemplatePath(templateName);
-            Resource resource = resolver.getResource(resolvedPath);
+            Resource resource = new ClassPathResource(buildTemplatePath(templateName));
             return resource.exists();
         } catch (Exception e) {
-            log.warn("Erreur lors de la vérification de l'existence du template {}: {}", 
-                    templateName, e.getMessage());
+            log.warn("Error while checking template existence: {}", templateName, e);
             return false;
         }
     }
@@ -86,13 +117,6 @@ public class TemplateLoader {
      * @return Le chemin complet du template
      */
     public String buildTemplatePath(String templateName) {
-        String templateDir = pathsConfig.resolvedTemplateDirectory();
-        // Si le chemin résolu inclut déjà le préfixe classpath:, ne pas l'ajouter à nouveau dans le chemin
-        if (templateDir.startsWith("classpath:")) {
-            return templateDir + "/" + templateName;
-        } else {
-            // Dans ce cas, nous utilisons un chemin absolu ou relatif
-            return templateDir + "/" + templateName;
-        }
+        return templateDirectory + "/" + templateName;
     }
 }

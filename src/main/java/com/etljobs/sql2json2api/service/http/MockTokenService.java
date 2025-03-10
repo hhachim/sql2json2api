@@ -5,8 +5,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import com.etljobs.sql2json2api.config.PathsConfig;
 import com.etljobs.sql2json2api.model.AuthenticationDetails;
+import com.etljobs.sql2json2api.util.PathResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import freemarker.template.Configuration;
@@ -20,8 +20,8 @@ import freemarker.template.Configuration;
 public class MockTokenService extends TokenService {
     
     public MockTokenService(RestTemplate restTemplate, ObjectMapper objectMapper, 
-            Configuration freemarkerConfiguration, PathsConfig pathsConfig) {
-        super(restTemplate, objectMapper, freemarkerConfiguration, pathsConfig);
+                          Configuration freemarkerConfiguration, PathResolver pathResolver) {
+        super(restTemplate, objectMapper, freemarkerConfiguration, pathResolver);
     }
     
     /**
