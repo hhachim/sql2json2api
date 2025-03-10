@@ -18,7 +18,7 @@ spring:
     url: ${params.database.url}
     username: ${params.database.username}
     password: ${params.database.password}
-    driver-class-name: ${params.databbase.driver-class-name}
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -33,6 +33,12 @@ spring:
 app:
   sql:
     directory: ${params.paths.workspace_directory}/sql
+    execution-order:
+      # - "GET_users.sql"
+      # - "POST_order.sql"
+      # - "GET_toto_non_existant.sql"
+      # - "TEST_httpbin.sql"
+      - "POST_product_groups.sql"
   template:
     directory: ${params.paths.workspace_directory}/templates/json
   batch:
