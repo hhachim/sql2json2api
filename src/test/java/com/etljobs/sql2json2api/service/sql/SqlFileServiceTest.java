@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.etljobs.sql2json2api.config.SqlConfig;
@@ -28,6 +29,7 @@ import com.etljobs.sql2json2api.exception.SqlFileException;
 import com.etljobs.sql2json2api.model.SqlFile;
 
 @SpringBootTest
+@ActiveProfiles("test") 
 public class SqlFileServiceTest {
 
     @Autowired

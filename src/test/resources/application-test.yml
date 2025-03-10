@@ -15,9 +15,9 @@ params:
       token-ttl: 1 # 3600
 spring:
   datasource:
-    url: ${DATASOURCE_URL}
-    # username: ${DATASOURCE_USERNAME}
-    # password: ${DATASOURCE_PASSWORD}
+    url: ${params.database.url}
+    username: ${params.database.username}
+    password: ${params.database.password}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:

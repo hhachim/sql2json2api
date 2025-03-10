@@ -7,11 +7,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpMethod;
+import org.springframework.test.context.ActiveProfiles;
 
 import com.etljobs.sql2json2api.exception.TemplateProcessingException;
 import com.etljobs.sql2json2api.model.ApiEndpointInfo;
 
 @SpringBootTest
+@ActiveProfiles("test")
 class TemplateMetadataServiceTest {
 
     @Autowired

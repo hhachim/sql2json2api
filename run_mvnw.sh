@@ -1,0 +1,1 @@
+ENV_FILE_PATH="/Users/hachimhassani/projects/etljobs/sql2json2api/usecasesConfig/.env" ./mvnw exec:java -Dexec.mainClass="com.etljobs.sql2json2api.Sql2json2apiApplication" -Dspring.profiles.active=dev

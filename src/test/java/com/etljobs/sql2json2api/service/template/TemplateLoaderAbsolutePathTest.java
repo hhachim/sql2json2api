@@ -14,11 +14,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.etljobs.sql2json2api.exception.TemplateProcessingException;
 
 @SpringBootTest
+@ActiveProfiles("test")
 class TemplateLoaderAbsolutePathTest {
 
     @Autowired

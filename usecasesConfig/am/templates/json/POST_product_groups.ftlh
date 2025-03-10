@@ -1,5 +1,5 @@
 <#--
-  @api-route: /api/product-groups
+  @api-route: /product-groups
   @api-method: POST
   @api-headers: {"Content-Type": "application/json", "Accept": "application/json"}
 -->
