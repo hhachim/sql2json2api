@@ -1,9 +1,24 @@
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3360/sql2json2api?useSSL=false&allowPublicKeyRetrieval=true
+params:
+  paths:
+    workspace_directory: /Users/hachimhassani/projects/etljobs/sql2json2api/usecasesConfig/am
+  database:
+    url: jdbc:mysql://localhost:3360/api-celio?useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
+  api:
+    base-url: http://api-celio.127.0.0.1.traefik.me/api
+    auth:
+      route: /authenticate
+      username: admin_api
+      password: gnDLta18o53x+4+/+MH/R/jX06V
+      token-ttl: 1 # 3600
+spring:
+  datasource:
+    url: ${params.database.url}
+    username: ${params.database.username}
+    password: ${params.database.password}
+    driver-class-name: ${params.databbase.driver-class-name}
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -15,12 +30,11 @@ spring:
   sql:
     init:
       mode: always
-
 app:
   sql:
-    directory: sql
+    directory: ${params.paths.workspace_directory}/sql
   template:
-    directory: templates/json
+    directory: ${params.paths.workspace_directory}/templates/json
   batch:
     size: 10
     delay: 500
@@ -30,10 +44,13 @@ app:
     backoff-multiplier: 1.5 # Multiplicateur pour le délai entre les tentatives
 api:
   auth:
-    url: https://api.example.com/auth/token
-    username: api_user
-    password: api_password
-    token-ttl: 3600
+    url: ${params.api.base-url}${params.api.auth.route}
+    username: ${params.api.auth.username}
+    password: ${params.api.auth.password}
+    token-ttl: ${params.api.auth.token-ttl} # 3600
+    # Chemin vers le template d'authentification
+    payload-template-path: ${params.paths.workspace_directory}/templates/json/auth-payload.ftlh
+  base-url: ${params.api.base-url} # URL de base pour les appels API
 
 logging:
   level:

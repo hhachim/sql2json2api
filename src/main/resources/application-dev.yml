@@ -7,17 +7,6 @@ spring:
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-    database-platform: org.hibernate.dialect.MySQLDialect
-  sql:
-    init:
-      mode: always
 
 app:
   sql:
@@ -31,27 +20,9 @@ app:
       # - "GET_toto_non_existant.sql"
       # - "TEST_httpbin.sql"
       - "POST_product_groups.sql"
-  template:
-    directory: ${params.paths.workspace_directory}/templates/json
-  batch:
-    size: 10
-    delay: 500
-  retry:
-    max-attempts: 3        # Nombre maximum de tentatives
-    delay-ms: 2000         # Délai initial entre les tentatives (ms)
-    backoff-multiplier: 1.5 # Multiplicateur pour le délai entre les tentatives
-api:
-  auth:
-    url: http://api-celio.127.0.0.1.traefik.me/api/authenticate
-    username: admin_api
-    password: gnDLta18o53x+4+/+MH/R/jX06V
-    token-ttl: 1 # 3600
-    # Chemin vers le template d'authentification
-    payload-template-path: ${params.paths.workspace_directory}/templates/json/auth/auth-payload.ftlh
-  base-url: http://api-celio.127.0.0.1.traefik.me # URL de base pour les appels API
 
-logging:
-  level:
-    root: INFO
-    com.etljobs.sql2json2api: DEBUG
-    org.springframework.jdbc.core: DEBUG
+# logging:
+#   level:
+#     root: INFO
+#     com.etljobs.sql2json2api: DEBUG
+#     org.springframework.jdbc.core: DEBUG
