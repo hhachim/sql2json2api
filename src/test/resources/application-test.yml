@@ -1,0 +1,65 @@
+params:
+  paths:
+    workspace_directory: /Users/hachimhassani/projects/etljobs/sql2json2api/usecasesConfig/am
+  database:
+    url: jdbc:mysql://localhost:3360/api-celio?useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  api:
+    base-url: http://api-celio.127.0.0.1.traefik.me/api
+    auth:
+      route: /authenticate
+      username: admin_api
+      password: gnDLta18o53x+4+/+MH/R/jX06V
+      token-ttl: 1 # 3600
+spring:
+  datasource:
+    url: ${params.database.url}
+    username: ${params.database.username}
+    password: ${params.database.password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    database-platform: org.hibernate.dialect.MySQLDialect
+  sql:
+    init:
+      mode: always
+app:
+  sql:
+    directory: ${params.paths.workspace_directory}/sql
+    execution-order:
+      # - "GET_users.sql"
+      # - "POST_order.sql"
+      # - "GET_toto_non_existant.sql"
+      # - "TEST_httpbin.sql"
+      - "POST_product_groups.sql"
+  template:
+    directory: ${params.paths.workspace_directory}/templates/json
+  batch:
+    size: 10
+    delay: 500
+  retry:
+    max-attempts: 3        # Nombre maximum de tentatives
+    delay-ms: 2000         # Délai initial entre les tentatives (ms)
+    backoff-multiplier: 1.5 # Multiplicateur pour le délai entre les tentatives
+api:
+  auth:
+    url: ${params.api.base-url}${params.api.auth.route}
+    username: ${params.api.auth.username}
+    password: ${params.api.auth.password}
+    token-ttl: ${params.api.auth.token-ttl} # 3600
+    # Chemin vers le template d'authentification
+    payload-template-path: ${params.paths.workspace_directory}/templates/json/auth-payload.ftlh
+  base-url: ${params.api.base-url} # URL de base pour les appels API
+
+logging:
+  level:
+    root: INFO
+    com.etljobs.sql2json2api: DEBUG
+    org.springframework.jdbc.core: DEBUG

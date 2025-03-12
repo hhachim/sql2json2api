@@ -1,0 +1,53 @@
+spring:
+  config:
+    import:
+      - optional:file:./.env.properties
+  datasource:
+    url: jdbc:mysql://${DB_HOSTNAME}:${DB_PORT}/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true  # Format: jdbc:mysql://host:port/db_name - Autres: jdbc:postgresql://, jdbc:oracle:thin:@, jdbc:h2:mem:
+    username: ${DB_USERNAME}  # Nom d'utilisateur pour la connexion à la base de données
+    password: ${DB_PASSWORD}  # Mot de passe pour la connexion à la base de données
+    driver-class-name: com.mysql.cj.jdbc.Driver  # Autres drivers: org.postgresql.Driver, oracle.jdbc.OracleDriver, org.h2.Driver, com.microsoft.sqlserver.jdbc.SQLServerDriver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # Options: create, create-drop, update, validate, none
+    show-sql: true  # Options: true, false - Affiche les requêtes SQL exécutées
+    properties:
+      hibernate:
+        format_sql: true  # Options: true, false - Formate les requêtes SQL pour lisibilité
+    database-platform: org.hibernate.dialect.MySQLDialect  # Autres: PostgreSQLDialect, OracleDialect, H2Dialect, com.microsoft.sqlserver.jdbc.SQLServerDriver
+  sql:
+    init:
+      mode: never  # Options: always, embedded, never - Contrôle l'exécution des scripts SQL d'initialisation
+
+app:
+  sql:
+    directory: "file:./sql"  # Chemin vers le répertoire des fichiers SQL (relatif ou absolu)
+    execution-order:  # Liste ordonnée des fichiers SQL à exécuter, vide = tous les fichiers dans l'ordre alphabétique
+      - "POST_product_groups.sql"
+      # - "POST_order.sql"
+      # - "GET_toto_non_existant.sql"
+      # - "TEST_httpbin.sql"
+  template:
+    directory: "file:./templates/json"  # Chemin vers le répertoire des templates FreeMarker (relatif ou absolu)
+  batch:
+    size: 10  # Entier positif - Nombre d'éléments traités par lot
+    delay: 500  # Entier positif - Délai entre les lots en millisecondes
+  retry:
+    max-attempts: 3  # Entier positif - Nombre maximum de tentatives (1 = pas de réessai)
+    delay-ms: 2000  # Entier positif - Délai initial entre les tentatives en millisecondes
+    backoff-multiplier: 1.5  # Nombre > 1.0 - Facteur multiplicatif pour le délai à chaque nouvel essai
+
+api:
+  auth:
+    url: ${ADP_API_HOST}/api/authenticate # URL complète du point de terminaison d'authentification
+    username: ${ADP_API_USERNAME}  # Nom d'utilisateur pour l'authentification API
+    password: ${ADP_API_PASSWORD}  # Mot de passe pour l'authentification API
+    token-ttl: 3600  # Entier positif - Durée de vie du token en secondes
+    payload-template-path: "auth-payload.ftlh"  # Chemin vers le template du payload d'authentification (relatif à app.template ou absolu)
+  base-url: ${ADP_API_HOST}/api # URL de base commune pour tous les appels API
+
+logging:
+  level:
+    root: INFO  # Options: TRACE, DEBUG, INFO, WARN, ERROR, FATAL, OFF
+    com.etljobs.sql2json2api: INFO  # Niveau de log spécifique pour les classes de l'application
+    org.springframework.jdbc.core: INFO  # Niveau de log spécifique pour les opérations JDBC
