@@ -38,7 +38,7 @@ app:
     delay-ms: 2000  # Entier positif - Délai initial entre les tentatives en millisecondes
     backoff-multiplier: 1.5  # Nombre > 1.0 - Facteur multiplicatif pour le délai à chaque nouvel essai
   threading:
-    enabled: false
+    enabled: true
     pool-size: 4
     queue-capacity: 100
     timeout-seconds: 60

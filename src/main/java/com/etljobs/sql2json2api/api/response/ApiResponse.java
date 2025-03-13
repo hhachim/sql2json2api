@@ -55,6 +55,22 @@ public class ApiResponse {
     @Builder.Default
     private int attemptNumber = 1;
     
+    // Référence au parser pour cette réponse, créé à la demande
+    private transient ApiResponseParser parser;
+    
+    /**
+     * Obtient un parser pour analyser le contenu de cette réponse.
+     * Le parser est créé à la demande et mis en cache.
+     * 
+     * @return Un ApiResponseParser pour cette réponse
+     */
+    public ApiResponseParser parser() {
+        if (parser == null) {
+            parser = new ApiResponseParser(this);
+        }
+        return parser;
+    }
+    
     /**
      * Indique si la réponse est un succès (code 2xx)
      * 

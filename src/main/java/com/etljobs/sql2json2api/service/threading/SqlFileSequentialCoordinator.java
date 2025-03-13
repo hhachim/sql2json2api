@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.etljobs.sql2json2api.api.response.ApiResponseAdapter;
 import com.etljobs.sql2json2api.exception.ProcessingException;
+import com.etljobs.sql2json2api.model.ApiResponse;
 import com.etljobs.sql2json2api.model.SqlFile;
 import com.etljobs.sql2json2api.service.sql.SqlFileService;
 
@@ -43,7 +44,7 @@ public class SqlFileSequentialCoordinator {
      * 
      * @return Résultats des appels API par fichier SQL
      */
-    public Map<String, List<com.etljobs.sql2json2api.model.ApiResponse>> processAllSqlFiles() {
+    public Map<String, List<ApiResponse>> processAllSqlFiles() {
         // Obtenir les fichiers SQL dans l'ordre configuré
         List<SqlFile> sqlFiles = sqlFileService.getSqlFilesInConfiguredOrder();
         
@@ -55,7 +56,7 @@ public class SqlFileSequentialCoordinator {
         log.info("Traitement séquentiel de {} fichiers SQL", sqlFiles.size());
         
         // Map pour stocker les résultats par fichier SQL
-        Map<String, List<com.etljobs.sql2json2api.model.ApiResponse>> resultsByFile = new HashMap<>();
+        Map<String, List<ApiResponse>> resultsByFile = new HashMap<>();
         
         // Traiter chaque fichier SQL séquentiellement
         for (SqlFile sqlFile : sqlFiles) {
@@ -66,7 +67,7 @@ public class SqlFileSequentialCoordinator {
                 ApiCallResults results = parallelExecutionService.executeAndWaitCompletion(sqlFile);
                 
                 // Convertir les résultats au format legacy
-                List<com.etljobs.sql2json2api.model.ApiResponse> legacyResponses = 
+                List<ApiResponse> legacyResponses = 
                         results.getResponses().stream()
                         .map(responseAdapter::toLegacy)
                         .toList();
@@ -103,7 +104,7 @@ public class SqlFileSequentialCoordinator {
      * @param sqlFileName Nom du fichier SQL à traiter
      * @return Liste des réponses API
      */
-    public List<com.etljobs.sql2json2api.model.ApiResponse> processSingleSqlFile(String sqlFileName) {
+    public List<ApiResponse> processSingleSqlFile(String sqlFileName) {
         try {
             log.info("Traitement du fichier SQL unique: {}", sqlFileName);
             
