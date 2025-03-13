@@ -101,15 +101,6 @@ public class ApiResponse {
     }
     
     /**
-     * Crée une instance d'ApiResponseParser pour cette réponse
-     * 
-     * @return Un parser configuré pour cette réponse
-     */
-    public ApiResponseParser parser() {
-        return new ApiResponseParser(this);
-    }
-    
-    /**
      * Crée une version simple de la réponse pour les logs
      * 
      * @return Chaîne de caractères résumant la réponse
@@ -119,34 +110,5 @@ public class ApiResponse {
                 statusCode, isSuccess(), 
                 (body != null) ? body.length() : 0, 
                 executionTimeMs);
-    }
-    
-    /**
-     * Crée un objet ApiResponse à partir de l'ancienne implémentation
-     * 
-     * @param oldResponse Ancienne instance de réponse API
-     * @return Nouvelle instance enrichie
-     */
-    public static ApiResponse fromLegacyResponse(com.etljobs.sql2json2api.model.ApiResponse oldResponse) {
-        if (oldResponse == null) {
-            return null;
-        }
-        
-        return ApiResponse.builder()
-                .statusCode(oldResponse.getStatusCode())
-                .body(oldResponse.getBody())
-                .build();
-    }
-    
-    /**
-     * Convertit cette réponse vers l'ancien format
-     * 
-     * @return Instance de l'ancien format de réponse API
-     */
-    public com.etljobs.sql2json2api.model.ApiResponse toLegacyResponse() {
-        return com.etljobs.sql2json2api.model.ApiResponse.builder()
-                .statusCode(this.statusCode)
-                .body(this.body)
-                .build();
     }
 }
