@@ -105,14 +105,29 @@ public class SqlFileSequentialCoordinator {
      * Journalise les détails des réponses API
      */
     private void logDetailedResponses(List<ApiResponse> responses, String fileName) {
-        if (responses.isEmpty()) {
+        if (responses == null || responses.isEmpty()) {
+            log.info("Aucune réponse pour {}", fileName);
             return;
         }
         
-        log.info("Détail des réponses pour {}:", fileName);
+        log.info("Détail des {} réponses pour {}:", responses.size(), fileName);
+        int successCount = 0;
+        int errorCount = 0;
+        
         for (int i = 0; i < responses.size(); i++) {
             ApiResponse response = responses.get(i);
-            log.info("  Réponse {}/{} - Statut: {}", i+1, responses.size(), response.getStatusCode());
+            boolean isSuccess = response.isSuccess();
+            
+            if (isSuccess) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+            
+            // Log plus détaillé incluant l'URL
+            log.info("  Réponse {}/{} - Statut: {} - URL: {}", 
+                    i+1, responses.size(), response.getStatusCode(), 
+                    response.getRequestUrl());
             
             // Afficher un extrait du corps de la réponse (tronqué si trop long)
             String body = response.getBody();
@@ -126,6 +141,8 @@ public class SqlFileSequentialCoordinator {
                 log.info("  Corps: <vide>");
             }
         }
+        
+        log.info("Résumé pour {}: {} succès, {} erreurs", fileName, successCount, errorCount);
     }
     
     /**

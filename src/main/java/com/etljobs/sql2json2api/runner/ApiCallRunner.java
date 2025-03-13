@@ -79,15 +79,28 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
 
             log.info("\n=== All SQL Files Processing Complete ===");
             
-            // Fermer le pool de threads explicitement
+            // Forcer l'arrêt du pool de threads explicitement et attendre qu'il se termine
             if (threadingEnabled) {
                 log.info("Arrêt explicite du pool de threads pour permettre à l'application de se terminer");
                 threadPoolManager.shutdown();
+                
+                // Attendre un court instant pour s'assurer que tous les logs sont affichés
+                try {
+                    Thread.sleep(1000);
+                    log.info("Application prête à se terminer");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
             }
 
         } catch (Exception e) {
             log.error("Error during API call demo", e);
             exitCode = 1;
+        } finally {
+            // S'assurer que le pool est bien arrêté même en cas d'erreur
+            if (threadingEnabled && threadPoolManager != null) {
+                threadPoolManager.shutdown();
+            }
         }
     }
     

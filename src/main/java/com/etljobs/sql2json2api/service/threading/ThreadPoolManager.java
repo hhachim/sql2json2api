@@ -93,12 +93,16 @@ public class ThreadPoolManager implements DisposableBean {
         return futures;
     }
     
-    /**
-     * Arrête manuellement le pool de threads.
-     * Peut être appelé explicitement à la fin du traitement.
-     */
     public void shutdown() {
         log.info("Arrêt manuel du pool de threads");
+        
+        // Ajout du log de l'état actuel du pool
+        if (executorService instanceof ThreadPoolExecutor) {
+            ThreadPoolExecutor tpe = (ThreadPoolExecutor) executorService;
+            log.info("État du pool avant arrêt: tâches actives={}, tâches en file d'attente={}",
+                    tpe.getActiveCount(), tpe.getQueue().size());
+        }
+        
         destroyExecutor();
     }
     
@@ -116,20 +120,25 @@ public class ThreadPoolManager implements DisposableBean {
      * Implémentation commune pour l'arrêt du ExecutorService.
      */
     private void destroyExecutor() {
-        if (executorService.isShutdown()) {
-            log.info("Le pool de threads est déjà arrêté");
+        if (executorService == null || executorService.isShutdown()) {
+            log.info("Le pool de threads est déjà arrêté ou null");
             return;
         }
         
+        // Log plus détaillé de l'état
+        log.info("Tentative d'arrêt du pool de threads...");
+        
         executorService.shutdown();
         try {
-            // Attendre la terminaison des tâches en cours pendant un certain temps
-            if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
-                // Forcer l'arrêt si les tâches ne se terminent pas normalement
+            // Augmenter le temps d'attente pour terminer les tâches
+            if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
                 log.warn("Les tâches ne se terminent pas, forçage de l'arrêt");
-                executorService.shutdownNow();
                 
-                // Attendre une seconde fois
+                // Obtenir la liste des tâches non exécutées
+                List<Runnable> pendingTasks = executorService.shutdownNow();
+                log.warn("{} tâches n'ont pas été exécutées", pendingTasks.size());
+                
+                // Attendre une seconde fois avec un délai plus court
                 if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
                     log.error("Le pool de threads n'a pas pu être arrêté proprement");
                 } else {
@@ -139,9 +148,9 @@ public class ThreadPoolManager implements DisposableBean {
                 log.info("Pool de threads arrêté avec succès");
             }
         } catch (InterruptedException e) {
+            log.warn("Interruption lors de l'arrêt du pool de threads", e);
             executorService.shutdownNow();
             Thread.currentThread().interrupt();
-            log.warn("Interruption lors de l'arrêt du pool de threads", e);
         }
     }
     
@@ -162,9 +171,8 @@ public class ThreadPoolManager implements DisposableBean {
         @Override
         public Thread newThread(Runnable r) {
             Thread t = new Thread(group, r, namePrefix + threadNumber.getAndIncrement(), 0);
-            if (t.isDaemon()) {
-                t.setDaemon(false);
-            }
+            // Assurez-vous que le thread n'est PAS daemon
+            t.setDaemon(false);
             if (t.getPriority() != Thread.NORM_PRIORITY) {
                 t.setPriority(Thread.NORM_PRIORITY);
             }

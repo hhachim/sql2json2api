@@ -45,6 +45,8 @@ public class ParallelExecutionResults<T> {
         completedCount = 0;
         timeoutCount = 0;
         errorCount = 0;
+        successfulResults.clear();
+        errors.clear();
         
         log.info("Attente des résultats pour {} tâches avec timeout de {}s", 
                 futures.size(), timeoutSeconds);
@@ -52,6 +54,11 @@ public class ParallelExecutionResults<T> {
         for (int i = 0; i < futures.size(); i++) {
             Future<T> future = futures.get(i);
             try {
+                // Log de progression
+                if (i % 5 == 0 || i == futures.size() - 1) {
+                    log.debug("Traitement de la future {}/{}", i+1, futures.size());
+                }
+                
                 T result = future.get(timeoutSeconds, TimeUnit.SECONDS);
                 successfulResults.add(result);
                 completedCount++;
@@ -75,8 +82,15 @@ public class ParallelExecutionResults<T> {
                 
             } catch (ExecutionException e) {
                 errorCount++;
-                errors.add(new ExecutionError(i, "Erreur d'exécution: " + e.getCause().getMessage(), e.getCause()));
-                log.warn("Erreur dans la tâche #{}: {}", i, e.getCause().getMessage());
+                String errorMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+                errors.add(new ExecutionError(i, "Erreur d'exécution: " + errorMsg, e.getCause()));
+                log.warn("Erreur dans la tâche #{}: {}", i, errorMsg);
+                
+            } catch (Exception e) {
+                // Capturer toute autre exception non prévue
+                errorCount++;
+                errors.add(new ExecutionError(i, "Exception inattendue: " + e.getMessage(), e));
+                log.error("Exception inattendue dans la tâche #{}: {}", i, e.getMessage(), e);
             }
         }
         

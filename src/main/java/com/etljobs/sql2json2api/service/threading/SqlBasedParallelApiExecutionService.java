@@ -122,7 +122,7 @@ public class SqlBasedParallelApiExecutionService {
                 log.debug("Template généré pour la ligne {}: {}", 
                           rowIdentifier, templateResult.getJsonPayload());
                 
-                log.debug("URL de l'appel API: {} {}", 
+                log.info("URL de l'appel API: {} {}", 
                           templateResult.getEndpointInfo().getMethod(),
                           templateResult.getEndpointInfo().getRoute());
                 
@@ -153,18 +153,34 @@ public class SqlBasedParallelApiExecutionService {
             
             // Attendre et traiter les résultats
             ParallelExecutionResults<ApiResponse> executionResults = new ParallelExecutionResults<>();
+            
+            // Log avant l'attente
+            log.info("En attente de la complétion de {} tâches...", futures.size());
+            
             List<ApiResponse> responses = executionResults.waitForAll(futures, threadPoolManager.getTimeoutSeconds());
+            
+            // Vérifier si des réponses ont été obtenues
+            log.info("Réception de {} réponses sur {} attendues", 
+                    responses.size(), futures.size());
             
             // Afficher les réponses en détail
             for (int i = 0; i < responses.size(); i++) {
                 ApiResponse response = responses.get(i);
-                log.info("Réponse {}/{} - Statut: {}, Corps: {}", 
+                log.info("Réponse {}/{} - Statut: {}, Temps: {}ms", 
                         i+1, responses.size(), response.getStatusCode(), 
-                        truncateIfNeeded(response.getBody(), 500));
+                        response.getExecutionTimeMs());
+                
+                // Afficher le corps de la réponse
+                if (response.getBody() != null) {
+                    String truncatedBody = truncateIfNeeded(response.getBody(), 500);
+                    log.info("Corps: {}", truncatedBody);
+                }
             }
             
-            // Ajouter les réponses au gestionnaire de résultats
-            responses.forEach(callResults::addResponse);
+            // Ajouter explicitement chaque réponse au gestionnaire de résultats
+            for (ApiResponse response : responses) {
+                callResults.addResponse(response);
+            }
             
             // Ajouter les erreurs d'exécution au gestionnaire de résultats
             for (ParallelExecutionResults.ExecutionError error : executionResults.getErrors()) {
@@ -172,14 +188,17 @@ public class SqlBasedParallelApiExecutionService {
                 if (taskIndex < tasks.size()) {
                     ApiCallTask failedTask = tasks.get(taskIndex);
                     
-                    callResults.addError(new RowError(
+                    RowError rowError = new RowError(
                             failedTask.getRowIndex(),
                             results.get(failedTask.getRowIndex()),
                             "Erreur d'exécution de la tâche: " + error.getMessage(),
                             error.getCause() instanceof Exception ? (Exception) error.getCause() : 
                                 new Exception(error.getMessage(), error.getCause()),
                             1
-                    ));
+                    );
+                    
+                    callResults.addError(rowError);
+                    log.error("Erreur pour la tâche #{}: {}", taskIndex, rowError.getFormattedMessage());
                 }
             }
             
@@ -189,7 +208,7 @@ public class SqlBasedParallelApiExecutionService {
                     executionResults.getErrorCount());
             
         } catch (Exception e) {
-            log.error("Erreur lors de l'exécution parallèle: {}", e.getMessage());
+            log.error("Erreur lors de l'exécution parallèle: {}", e.getMessage(), e);
             throw new ProcessingException("Erreur lors du traitement parallèle", e);
         }
     }
