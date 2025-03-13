@@ -56,5 +56,5 @@ api:
 logging:
   level:
     root: INFO  # Options: TRACE, DEBUG, INFO, WARN, ERROR, FATAL, OFF
-    com.etljobs.sql2json2api: INFO  # Niveau de log spécifique pour les classes de l'application
+    com.etljobs.sql2json2api: DEBUG  # Niveau de log spécifique pour les classes de l'application
     org.springframework.jdbc.core: INFO  # Niveau de log spécifique pour les opérations JDBC
