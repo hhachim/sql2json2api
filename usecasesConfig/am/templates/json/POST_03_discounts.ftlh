@@ -1,5 +1,5 @@
 <#--
-  @api-route: /api/discounts
+  @api-route: /discounts
   @api-method: POST
   @api-headers: {"Content-Type": "application/json", "Accept": "application/json"}
 -->

@@ -23,10 +23,11 @@ app:
   sql:
     directory: "file:./sql"  # Chemin vers le répertoire des fichiers SQL (relatif ou absolu)
     execution-order:  # Liste ordonnée des fichiers SQL à exécuter, vide = tous les fichiers dans l'ordre alphabétique
-      - "POST_product_groups.sql"
-      # - "POST_order.sql"
-      # - "GET_toto_non_existant.sql"
-      # - "TEST_httpbin.sql"
+      - "POST_01_product_groups.sql"
+      - "POST_02_discount_groups.sql"
+      - "POST_03_discounts.sql"
+      - "POST_05_discount_groups_discounts.sql"
+      - "POST_06_discount_groups_entities.sql"
   template:
     directory: "file:./templates/json"  # Chemin vers le répertoire des templates FreeMarker (relatif ou absolu)
   batch:
