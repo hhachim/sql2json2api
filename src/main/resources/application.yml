@@ -32,6 +32,12 @@ app:
     max-attempts: 3        # Nombre maximum de tentatives
     delay-ms: 2000         # Délai initial entre les tentatives (ms)
     backoff-multiplier: 1.5 # Multiplicateur pour le délai entre les tentatives
+  threading:
+    enabled: false
+    pool-size: 4
+    queue-capacity: 100
+    timeout-seconds: 60
+    submission-delay-ms: 50
 api:
   auth:
     url: ${API_BASE_URL}${API_AUTH_ROUTE}
