@@ -8,9 +8,9 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.etljobs.sql2json2api.api.response.ApiResponse;
 import com.etljobs.sql2json2api.api.response.ApiResponseAdapter;
 import com.etljobs.sql2json2api.exception.ProcessingException;
-import com.etljobs.sql2json2api.model.ApiResponse;
 import com.etljobs.sql2json2api.model.SqlFile;
 import com.etljobs.sql2json2api.service.sql.SqlFileService;
 
@@ -44,7 +44,7 @@ public class SqlFileSequentialCoordinator {
      * 
      * @return Résultats des appels API par fichier SQL
      */
-    public Map<String, List<ApiResponse>> processAllSqlFiles() {
+    public Map<String, List<com.etljobs.sql2json2api.model.ApiResponse>> processAllSqlFiles() {
         // Obtenir les fichiers SQL dans l'ordre configuré
         List<SqlFile> sqlFiles = sqlFileService.getSqlFilesInConfiguredOrder();
         
@@ -56,7 +56,7 @@ public class SqlFileSequentialCoordinator {
         log.info("Traitement séquentiel de {} fichiers SQL", sqlFiles.size());
         
         // Map pour stocker les résultats par fichier SQL
-        Map<String, List<ApiResponse>> resultsByFile = new HashMap<>();
+        Map<String, List<com.etljobs.sql2json2api.model.ApiResponse>> resultsByFile = new HashMap<>();
         
         // Traiter chaque fichier SQL séquentiellement
         for (SqlFile sqlFile : sqlFiles) {
@@ -67,7 +67,7 @@ public class SqlFileSequentialCoordinator {
                 ApiCallResults results = parallelExecutionService.executeAndWaitCompletion(sqlFile);
                 
                 // Convertir les résultats au format legacy
-                List<ApiResponse> legacyResponses = 
+                List<com.etljobs.sql2json2api.model.ApiResponse> legacyResponses = 
                         results.getResponses().stream()
                         .map(responseAdapter::toLegacy)
                         .toList();
@@ -81,6 +81,9 @@ public class SqlFileSequentialCoordinator {
                 
                 log.info("===> Fin du traitement de {}: {} succès, {} erreurs", 
                         sqlFile.getFileName(), successCount, errorCount);
+                
+                // Log des réponses détaillées (ajout)
+                logDetailedResponses(results.getResponses(), sqlFile.getFileName());
                 
             } catch (Exception e) {
                 log.error("Erreur critique lors du traitement du fichier {}: {}", 
@@ -99,12 +102,39 @@ public class SqlFileSequentialCoordinator {
     }
     
     /**
+     * Journalise les détails des réponses API
+     */
+    private void logDetailedResponses(List<ApiResponse> responses, String fileName) {
+        if (responses.isEmpty()) {
+            return;
+        }
+        
+        log.info("Détail des réponses pour {}:", fileName);
+        for (int i = 0; i < responses.size(); i++) {
+            ApiResponse response = responses.get(i);
+            log.info("  Réponse {}/{} - Statut: {}", i+1, responses.size(), response.getStatusCode());
+            
+            // Afficher un extrait du corps de la réponse (tronqué si trop long)
+            String body = response.getBody();
+            if (body != null) {
+                if (body.length() > 500) {
+                    log.info("  Corps: {}...", body.substring(0, 500));
+                } else {
+                    log.info("  Corps: {}", body);
+                }
+            } else {
+                log.info("  Corps: <vide>");
+            }
+        }
+    }
+    
+    /**
      * Traite un seul fichier SQL spécifié par son nom.
      * 
      * @param sqlFileName Nom du fichier SQL à traiter
      * @return Liste des réponses API
      */
-    public List<ApiResponse> processSingleSqlFile(String sqlFileName) {
+    public List<com.etljobs.sql2json2api.model.ApiResponse> processSingleSqlFile(String sqlFileName) {
         try {
             log.info("Traitement du fichier SQL unique: {}", sqlFileName);
             
@@ -113,6 +143,9 @@ public class SqlFileSequentialCoordinator {
             
             // Exécuter et attendre les résultats
             ApiCallResults results = parallelExecutionService.executeAndWaitCompletion(sqlFile);
+            
+            // Log des réponses détaillées
+            logDetailedResponses(results.getResponses(), sqlFileName);
             
             // Convertir et retourner les résultats
             return results.getResponses().stream()

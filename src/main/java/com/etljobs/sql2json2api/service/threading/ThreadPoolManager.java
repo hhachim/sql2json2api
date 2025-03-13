@@ -94,24 +94,49 @@ public class ThreadPoolManager implements DisposableBean {
     }
     
     /**
+     * Arrête manuellement le pool de threads.
+     * Peut être appelé explicitement à la fin du traitement.
+     */
+    public void shutdown() {
+        log.info("Arrêt manuel du pool de threads");
+        destroyExecutor();
+    }
+    
+    /**
      * Arrête proprement le service d'exécution.
      * Cette méthode est appelée automatiquement par Spring lors de l'arrêt de l'application.
      */
     @Override
     public void destroy() {
-        log.info("Arrêt du pool de threads");
+        log.info("Arrêt automatique du pool de threads (appelé par Spring)");
+        destroyExecutor();
+    }
+    
+    /**
+     * Implémentation commune pour l'arrêt du ExecutorService.
+     */
+    private void destroyExecutor() {
+        if (executorService.isShutdown()) {
+            log.info("Le pool de threads est déjà arrêté");
+            return;
+        }
         
         executorService.shutdown();
         try {
             // Attendre la terminaison des tâches en cours pendant un certain temps
-            if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+            if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
                 // Forcer l'arrêt si les tâches ne se terminent pas normalement
+                log.warn("Les tâches ne se terminent pas, forçage de l'arrêt");
                 executorService.shutdownNow();
                 
                 // Attendre une seconde fois
-                if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+                if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
                     log.error("Le pool de threads n'a pas pu être arrêté proprement");
+                } else {
+                    log.info("Pool de threads arrêté avec succès (après forçage)");
                 }
+            } else {
+                log.info("Pool de threads arrêté avec succès");
             }
         } catch (InterruptedException e) {
             executorService.shutdownNow();

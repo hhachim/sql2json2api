@@ -118,6 +118,14 @@ public class SqlBasedParallelApiExecutionService {
                 ApiTemplateResult templateResult = templateService.processTemplate(
                         sqlFile.getTemplateName(), row);
                 
+                // Afficher le template généré pour débogage
+                log.debug("Template généré pour la ligne {}: {}", 
+                          rowIdentifier, templateResult.getJsonPayload());
+                
+                log.debug("URL de l'appel API: {} {}", 
+                          templateResult.getEndpointInfo().getMethod(),
+                          templateResult.getEndpointInfo().getRoute());
+                
                 // Créer une tâche d'appel API
                 ApiCallTask task = apiCallTaskFactory.createFromTemplateResult(
                         templateResult, i, rowIdentifier);
@@ -146,6 +154,14 @@ public class SqlBasedParallelApiExecutionService {
             // Attendre et traiter les résultats
             ParallelExecutionResults<ApiResponse> executionResults = new ParallelExecutionResults<>();
             List<ApiResponse> responses = executionResults.waitForAll(futures, threadPoolManager.getTimeoutSeconds());
+            
+            // Afficher les réponses en détail
+            for (int i = 0; i < responses.size(); i++) {
+                ApiResponse response = responses.get(i);
+                log.info("Réponse {}/{} - Statut: {}, Corps: {}", 
+                        i+1, responses.size(), response.getStatusCode(), 
+                        truncateIfNeeded(response.getBody(), 500));
+            }
             
             // Ajouter les réponses au gestionnaire de résultats
             responses.forEach(callResults::addResponse);
@@ -201,6 +217,14 @@ public class SqlBasedParallelApiExecutionService {
                 ApiTemplateResult templateResult = templateService.processTemplate(
                         sqlFile.getTemplateName(), row);
                 
+                // Afficher les informations de l'appel API
+                log.info("Appel API pour la ligne {}: {} {}", 
+                        rowIdentifier,
+                        templateResult.getEndpointInfo().getMethod(),
+                        templateResult.getEndpointInfo().getRoute());
+                
+                log.debug("Payload JSON: {}", templateResult.getJsonPayload());
+                
                 // Faire l'appel API directement
                 com.etljobs.sql2json2api.model.ApiResponse legacyResponse = apiClientService.callApi(
                         templateResult.getEndpointInfo().getRoute(),
@@ -218,6 +242,11 @@ public class SqlBasedParallelApiExecutionService {
                         .attemptNumber(1)
                         .build();
                 
+                // Afficher la réponse
+                log.info("Réponse de l'API - Statut: {}, Corps: {}", 
+                        response.getStatusCode(), 
+                        truncateIfNeeded(response.getBody(), 500));
+                
                 callResults.addResponse(response);
                 
                 log.debug("Ligne {} traitée avec statut: {}", 
@@ -233,6 +262,19 @@ public class SqlBasedParallelApiExecutionService {
         }
         
         log.info("Traitement séquentiel terminé");
+    }
+    
+    /**
+     * Tronque une chaîne si elle dépasse une longueur maximale
+     */
+    private String truncateIfNeeded(String text, int maxLength) {
+        if (text == null) {
+            return "null";
+        }
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength) + "...";
     }
     
     /**

@@ -20,6 +20,7 @@ import com.etljobs.sql2json2api.service.sql.SqlExecutionService;
 import com.etljobs.sql2json2api.service.sql.SqlFileService;
 import com.etljobs.sql2json2api.service.template.TemplateProcessingService;
 import com.etljobs.sql2json2api.service.threading.SqlFileSequentialCoordinator;
+import com.etljobs.sql2json2api.service.threading.ThreadPoolManager;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,6 +39,7 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
     private final ApiClientService apiClientService;
     private final TokenService tokenService;
     private final SqlFileSequentialCoordinator coordinator;
+    private final ThreadPoolManager threadPoolManager;
     
     @Value("${app.threading.enabled:false}")
     private boolean threadingEnabled;
@@ -50,13 +52,15 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
             TemplateProcessingService templateProcessingService,
             ApiClientService apiClientService,
             TokenService tokenService,
-            SqlFileSequentialCoordinator coordinator) {
+            SqlFileSequentialCoordinator coordinator,
+            ThreadPoolManager threadPoolManager) {
         this.sqlFileService = sqlFileService;
         this.sqlExecutionService = sqlExecutionService;
         this.templateProcessingService = templateProcessingService;
         this.apiClientService = apiClientService;
         this.tokenService = tokenService;
         this.coordinator = coordinator;
+        this.threadPoolManager = threadPoolManager;
     }
 
     @Override
@@ -74,6 +78,12 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
             }
 
             log.info("\n=== All SQL Files Processing Complete ===");
+            
+            // Fermer le pool de threads explicitement
+            if (threadingEnabled) {
+                log.info("Arrêt explicite du pool de threads pour permettre à l'application de se terminer");
+                threadPoolManager.shutdown();
+            }
 
         } catch (Exception e) {
             log.error("Error during API call demo", e);
@@ -102,6 +112,14 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
                 
                 log.info("{}: {} appels API - {} succès, {} échecs", 
                         fileName, responses.size(), successCount, responses.size() - successCount);
+                
+                // Afficher le contenu des réponses
+                for (int i = 0; i < responses.size(); i++) {
+                    ApiResponse response = responses.get(i);
+                    log.info("  Réponse {}/{} - Statut: {}, Corps: {}", 
+                            i+1, responses.size(), response.getStatusCode(), 
+                            truncateIfNeeded(response.getBody(), 500));
+                }
             }
         }
     }
@@ -188,6 +206,19 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
         }
     }
 
+    /**
+     * Tronque une chaîne si elle dépasse une longueur maximale
+     */
+    private String truncateIfNeeded(String text, int maxLength) {
+        if (text == null) {
+            return "null";
+        }
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength) + "...";
+    }
+    
     @Override
     public int getExitCode() {
         return exitCode;
