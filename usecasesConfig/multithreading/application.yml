@@ -48,7 +48,7 @@ api:
     password: ${ADP_API_PASSWORD}  # Mot de passe pour l'authentification API
     token-ttl: 3600  # Entier positif - Durée de vie du token en secondes
     payload-template-path: "auth-payload.ftlh"  # Chemin vers le template du payload d'authentification (relatif à app.template ou absolu)
-    token: "blabla"  # Token prédéfini optionnel
+    token: {API_TOKEN:}  # Token prédéfini optionnel
     mode: "auto"  # Mode par défaut: utilise le token configuré s'il existe, sinon génère un nouveau token, ou "configured" si vous souhaitez forcer l'utilisation du token configuré ou "generated" si vous souhaitez forcer la génération d'un nouveau token
   base-url: ${ADP_API_HOST}/api # URL de base commune pour tous les appels API
 
