@@ -1,0 +1,1 @@
+- ls : `jar tf target/sql2json2api-0.0.1-SNAPSHOT.jar`

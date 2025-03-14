@@ -67,6 +67,29 @@ public class TokenService {
     }
 
     /**
+     * Vérifie si un token configuré est valide (non null et non vide)
+     * 
+     * @return true si le token configuré est valide, false sinon
+     */
+    private boolean isConfiguredTokenValid() {
+        return configuredToken != null && !configuredToken.trim().isEmpty();
+    }
+    
+    /**
+     * Ajoute le préfixe "Bearer " si nécessaire
+     * 
+     * @param token Token à formater
+     * @return Token avec préfixe "Bearer "
+     */
+    private String ensureBearerPrefix(String token) {
+        String trimmedToken = token.trim();
+        if (trimmedToken.startsWith("Bearer ")) {
+            return trimmedToken;
+        }
+        return "Bearer " + trimmedToken;
+    }
+
+    /**
      * Génère le payload JSON à partir du template Freemarker et des variables d'authentification
      * 
      * @return Le payload JSON généré
@@ -114,9 +137,9 @@ public class TokenService {
      */
     public String getToken() {
         // Vérifier si un token est configuré directement
-        if (configuredToken != null && !configuredToken.isEmpty()) {
+        if (isConfiguredTokenValid()) {
             log.debug("Utilisation du token configuré directement: {}",configuredToken);
-            return configuredToken.startsWith("Bearer ") ? configuredToken : "Bearer " + configuredToken;
+            return ensureBearerPrefix(configuredToken);
         }
 
         // Check if we have a cached token that's still valid
@@ -219,10 +242,11 @@ public class TokenService {
      */
     public String refreshToken() {
         // Vérifier si un token est configuré directement
-        if (configuredToken != null && !configuredToken.isEmpty()) {
+        if (isConfiguredTokenValid()) {
             log.debug("Utilisation du token configuré directement (refresh ignoré)");
-            return configuredToken.startsWith("Bearer ") ? configuredToken : "Bearer " + configuredToken;
+            return ensureBearerPrefix(configuredToken);
         }
+        
         cachedToken = null;
         tokenExpiration = null;
         return getToken();
