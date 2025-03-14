@@ -46,7 +46,8 @@ api:
     token-ttl: ${API_AUTH_TOKEN_TTL} # 3600
     # Chemin vers le template d'authentification
     payload-template-path: auth-payload.ftlh
-    # token: ${API_AUTH_TOKEN:}  # Token prédéfini optionnel
+    token: ${API_AUTH_TOKEN:}  # Token prédéfini optionnel
+    mode: "auto"  # Mode par défaut: utilise le token configuré s'il existe, sinon génère un nouveau token, ou "configured" si vous souhaitez forcer l'utilisation du token configuré ou "generated" si vous souhaitez forcer la génération d'un nouveau token
   base-url: ${API_BASE_URL} # URL de base pour les appels API
 
 logging:

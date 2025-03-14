@@ -51,6 +51,9 @@ public class TokenService {
     @Value("${api.auth.token:}")
     private String configuredToken;
     
+    @Value("${api.auth.mode:auto}")
+    private String tokenMode;
+    
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final Configuration freemarkerConfiguration;
@@ -64,29 +67,6 @@ public class TokenService {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.freemarkerConfiguration = freemarkerConfiguration;
-    }
-
-    /**
-     * Vérifie si un token configuré est valide (non null et non vide)
-     * 
-     * @return true si le token configuré est valide, false sinon
-     */
-    private boolean isConfiguredTokenValid() {
-        return configuredToken != null && !configuredToken.trim().isEmpty();
-    }
-    
-    /**
-     * Ajoute le préfixe "Bearer " si nécessaire
-     * 
-     * @param token Token à formater
-     * @return Token avec préfixe "Bearer "
-     */
-    private String ensureBearerPrefix(String token) {
-        String trimmedToken = token.trim();
-        if (trimmedToken.startsWith("Bearer ")) {
-            return trimmedToken;
-        }
-        return "Bearer " + trimmedToken;
     }
 
     /**
@@ -136,12 +116,23 @@ public class TokenService {
      * @throws ApiCallException if token generation fails
      */
     public String getToken() {
-        // Vérifier si un token est configuré directement
-        if (isConfiguredTokenValid()) {
-            log.debug("Utilisation du token configuré directement: {}",configuredToken);
-            return ensureBearerPrefix(configuredToken);
+        // Utiliser le token configuré si le mode est "configured" ou "auto" et qu'un token est configuré
+        if ("configured".equalsIgnoreCase(tokenMode)) {
+            if (configuredToken == null || configuredToken.isEmpty()) {
+                throw new ApiCallException("Le mode token est configuré sur 'configured' mais aucun token n'est défini dans les propriétés.");
+            }
+            log.debug("Utilisation du token configuré (mode: {}): {}", tokenMode, configuredToken);
+            return configuredToken.startsWith("Bearer ") ? configuredToken : "Bearer " + configuredToken;
+        }
+        
+        // Utiliser le token configuré en mode auto si disponible
+        if ("auto".equalsIgnoreCase(tokenMode) && configuredToken != null && !configuredToken.isEmpty()) {
+            log.debug("Utilisation du token configuré (mode: auto): {}", configuredToken);
+            return configuredToken.startsWith("Bearer ") ? configuredToken : "Bearer " + configuredToken;
         }
 
+        // En mode "generated" ou en mode "auto" sans token configuré:
+        
         // Check if we have a cached token that's still valid
         if (cachedToken != null && tokenExpiration != null && 
                 tokenExpiration.isAfter(Instant.now().plus(Duration.ofMinutes(5)))) {
@@ -151,7 +142,7 @@ public class TokenService {
         }
         
         // Otherwise, generate a new token
-        log.debug("Generating new authentication token...");
+        log.debug("Generating new authentication token (mode: {})...", tokenMode);
         return generateNewToken();
     }
     
@@ -241,12 +232,15 @@ public class TokenService {
      * @return The newly generated token
      */
     public String refreshToken() {
-        // Vérifier si un token est configuré directement
-        if (isConfiguredTokenValid()) {
-            log.debug("Utilisation du token configuré directement (refresh ignoré)");
-            return ensureBearerPrefix(configuredToken);
+        if ("configured".equalsIgnoreCase(tokenMode)) {
+            log.debug("Mode token 'configured': pas de refresh, utilisation du token configuré");
+            if (configuredToken == null || configuredToken.isEmpty()) {
+                throw new ApiCallException("Le mode token est configuré sur 'configured' mais aucun token n'est défini dans les propriétés.");
+            }
+            return configuredToken.startsWith("Bearer ") ? configuredToken : "Bearer " + configuredToken;
         }
         
+        // En mode auto ou generated, on peut rafraîchir le token
         cachedToken = null;
         tokenExpiration = null;
         return getToken();
