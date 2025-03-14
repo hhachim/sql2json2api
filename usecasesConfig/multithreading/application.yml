@@ -24,7 +24,7 @@ app:
     directory: "file:./sql"  # Chemin vers le répertoire des fichiers SQL (relatif ou absolu)
     execution-order:  # Liste ordonnée des fichiers SQL à exécuter, vide = tous les fichiers dans l'ordre alphabétique
       - "GET_07_entities_multithreads.sql"
-      - "GET_07_poc2_multithreads.sql"
+      - "GET_07_orders_multithreads.sql"
   template:
     directory: "file:./templates/json"  # Chemin vers le répertoire des templates FreeMarker (relatif ou absolu)
   batch:
