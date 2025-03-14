@@ -1,4 +1,4 @@
 SELECT rowid
 FROM llx_entity
 ORDER BY rowid
-limit 10
+limit 1

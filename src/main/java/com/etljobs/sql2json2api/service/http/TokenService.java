@@ -47,6 +47,9 @@ public class TokenService {
     
     @Value("${api.auth.payload-template-path:auth/auth-payload.ftlh}")
     private String payloadTemplatePath;
+
+    @Value("${api.auth.token:}")
+    private String configuredToken;
     
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -110,6 +113,12 @@ public class TokenService {
      * @throws ApiCallException if token generation fails
      */
     public String getToken() {
+        // Vérifier si un token est configuré directement
+        if (configuredToken != null && !configuredToken.isEmpty()) {
+            log.debug("Utilisation du token configuré directement: {}",configuredToken);
+            return configuredToken.startsWith("Bearer ") ? configuredToken : "Bearer " + configuredToken;
+        }
+
         // Check if we have a cached token that's still valid
         if (cachedToken != null && tokenExpiration != null && 
                 tokenExpiration.isAfter(Instant.now().plus(Duration.ofMinutes(5)))) {
@@ -209,6 +218,11 @@ public class TokenService {
      * @return The newly generated token
      */
     public String refreshToken() {
+        // Vérifier si un token est configuré directement
+        if (configuredToken != null && !configuredToken.isEmpty()) {
+            log.debug("Utilisation du token configuré directement (refresh ignoré)");
+            return configuredToken.startsWith("Bearer ") ? configuredToken : "Bearer " + configuredToken;
+        }
         cachedToken = null;
         tokenExpiration = null;
         return getToken();

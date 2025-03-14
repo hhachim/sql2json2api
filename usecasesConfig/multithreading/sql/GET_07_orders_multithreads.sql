@@ -1,4 +1,4 @@
 SELECT uuid
 FROM llx_commande
 ORDER BY rowid
-LIMIT 20
+LIMIT 1
