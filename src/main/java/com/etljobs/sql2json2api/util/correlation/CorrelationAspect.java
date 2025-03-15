@@ -8,10 +8,6 @@ import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Aspect qui gère automatiquement les identifiants de corrélation
- * aux points clés de l'application.
- */
 @Aspect
 @Component
 @Slf4j
@@ -19,7 +15,6 @@ public class CorrelationAspect {
     
     /**
      * Point de coupe pour les méthodes principales de traitement.
-     * Ceci cible spécifiquement les méthodes qui démarrent le traitement d'un fichier SQL.
      */
     @Pointcut("execution(* com.etljobs.sql2json2api.service.threading.SqlFileSequentialCoordinator.process*(..))")
     public void sqlFileProcessingMethods() {}
@@ -31,9 +26,15 @@ public class CorrelationAspect {
     public void apiCallMethods() {}
     
     /**
+     * Point de coupe pour les méthodes de Runner.
+     */
+    @Pointcut("execution(* com.etljobs.sql2json2api.runner.ApiCallRunner.*(..))")
+    public void runnerMethods() {}
+    
+    /**
      * Conseil qui entoure les méthodes de traitement pour ajouter l'ID de corrélation.
      */
-    @Around("sqlFileProcessingMethods() || apiCallMethods()")
+    @Around("sqlFileProcessingMethods() || apiCallMethods() || runnerMethods()")
     public Object addCorrelationId(ProceedingJoinPoint joinPoint) throws Throwable {
         String methodName = joinPoint.getSignature().getName();
         String className = joinPoint.getSignature().getDeclaringTypeName();

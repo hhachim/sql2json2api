@@ -21,6 +21,7 @@ import com.etljobs.sql2json2api.service.sql.SqlFileService;
 import com.etljobs.sql2json2api.service.template.TemplateProcessingService;
 import com.etljobs.sql2json2api.service.threading.SqlFileSequentialCoordinator;
 import com.etljobs.sql2json2api.service.threading.ThreadPoolManager;
+import com.etljobs.sql2json2api.util.correlation.CorrelationContext;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,7 +41,7 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
     private final TokenService tokenService;
     private final SqlFileSequentialCoordinator coordinator;
     private final ThreadPoolManager threadPoolManager;
-    
+
     @Value("${app.threading.enabled:false}")
     private boolean threadingEnabled;
     private int exitCode = 0;
@@ -65,78 +66,96 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
 
     @Override
     public void run(String... args) throws Exception {
-        try {
-            log.info("=== API Call Sql2Json2Api ===");
-            log.info("Mode d'exécution: {}", threadingEnabled ? "parallèle" : "séquentiel");
+        // Utiliser la méthode utilitaire pour garantir un ID de corrélation
+        CorrelationContext.withCorrelationId(() -> {
+            try {
+                log.info("=== API Call Sql2Json2Api ===");
+                log.info("Mode d'exécution: {}", threadingEnabled ? "parallèle" : "séquentiel");
 
-            if (threadingEnabled) {
-                // Mode multithreading avec le coordinateur
-                processWithCoordinator();
-            } else {
-                // Mode séquentiel traditionnel
-                processSequentially();
-            }
+                if (threadingEnabled) {
+                    // Mode multithreading avec le coordinateur
+                    processWithCoordinator();
+                } else {
+                    // Mode séquentiel traditionnel
+                    processSequentially();
+                }
 
-            log.info("\n=== All SQL Files Processing Complete ===");
-            
-            // Forcer l'arrêt du pool de threads explicitement et attendre qu'il se termine
-            if (threadingEnabled) {
-                log.info("Arrêt explicite du pool de threads pour permettre à l'application de se terminer");
-                threadPoolManager.shutdown();
-                
-                // Attendre un court instant pour s'assurer que tous les logs sont affichés
-                try {
-                    Thread.sleep(1000);
-                    log.info("Application prête à se terminer");
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                log.info("\n=== All SQL Files Processing Complete ===");
+
+                // Forcer l'arrêt du pool de threads explicitement et attendre qu'il se termine
+                if (threadingEnabled) {
+                    log.info("Arrêt explicite du pool de threads pour permettre à l'application de se terminer");
+                    threadPoolManager.shutdown();
+
+                    // Attendre un court instant pour s'assurer que tous les logs sont affichés
+                    try {
+                        Thread.sleep(1000);
+                        log.info("Application prête à se terminer");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+
+            } catch (Exception e) {
+                log.error("Error during API call demo", e);
+                exitCode = 1;
+            } finally {
+                // S'assurer que le pool est bien arrêté même en cas d'erreur
+                if (threadingEnabled && threadPoolManager != null) {
+                    threadPoolManager.shutdown();
                 }
             }
-
-        } catch (Exception e) {
-            log.error("Error during API call demo", e);
-            exitCode = 1;
-        } finally {
-            // S'assurer que le pool est bien arrêté même en cas d'erreur
-            if (threadingEnabled && threadPoolManager != null) {
-                threadPoolManager.shutdown();
-            }
-        }
+        });
     }
-    
+
     /**
      * Traitement avec le coordinateur pour l'exécution parallèle des appels API
      */
     private void processWithCoordinator() {
-        // Utiliser le coordinateur pour traiter tous les fichiers SQL séquentiellement
-        Map<String, List<ApiResponse>> resultsByFile = coordinator.processAllSqlFiles();
-        
-        // Afficher le résumé des résultats
-        if (resultsByFile.isEmpty()) {
-            log.warn("Aucun résultat obtenu, vérifiez la configuration des fichiers SQL");
+        // Vérifier si un ID de corrélation existe déjà
+        String correlationId = CorrelationContext.getId();
+        if (correlationId == null) {
+            // Si aucun ID n'existe, en créer un nouveau
+            correlationId = CorrelationContext.setId();
+            log.debug("Nouvel ID de corrélation créé dans processWithCoordinator: {}", correlationId);
         } else {
-            log.info("\n=== Résumé des traitements ===");
-            
-            for (Map.Entry<String, List<ApiResponse>> entry : resultsByFile.entrySet()) {
-                String fileName = entry.getKey();
-                List<ApiResponse> responses = entry.getValue();
-                
-                long successCount = responses.stream().filter(ApiResponse::isSuccess).count();
-                
-                log.info("{}: {} appels API - {} succès, {} échecs", 
-                        fileName, responses.size(), successCount, responses.size() - successCount);
-                
-                // Afficher le contenu des réponses
-                for (int i = 0; i < responses.size(); i++) {
-                    ApiResponse response = responses.get(i);
-                    log.info("  Réponse {}/{} - Statut: {}, Corps: {}", 
-                            i+1, responses.size(), response.getStatusCode(), 
-                            truncateIfNeeded(response.getBody(), 500));
+            log.debug("Utilisation de l'ID de corrélation existant dans processWithCoordinator: {}", correlationId);
+        }
+
+        try {
+            // Utiliser le coordinateur pour traiter tous les fichiers SQL séquentiellement
+            Map<String, List<ApiResponse>> resultsByFile = coordinator.processAllSqlFiles();
+
+            // Afficher le résumé des résultats
+            if (resultsByFile.isEmpty()) {
+                log.warn("Aucun résultat obtenu, vérifiez la configuration des fichiers SQL");
+            } else {
+                log.info("\n=== Résumé des traitements ===");
+
+                for (Map.Entry<String, List<ApiResponse>> entry : resultsByFile.entrySet()) {
+                    String fileName = entry.getKey();
+                    List<ApiResponse> responses = entry.getValue();
+
+                    long successCount = responses.stream().filter(ApiResponse::isSuccess).count();
+
+                    log.info("{}: {} appels API - {} succès, {} échecs",
+                            fileName, responses.size(), successCount, responses.size() - successCount);
+
+                    // Afficher le contenu des réponses
+                    for (int i = 0; i < responses.size(); i++) {
+                        ApiResponse response = responses.get(i);
+                        log.info("  Réponse {}/{} - Statut: {}, Corps: {}",
+                                i + 1, responses.size(), response.getStatusCode(),
+                                truncateIfNeeded(response.getBody(), 500));
+                    }
                 }
             }
+        } finally {
+            // Ne pas nettoyer l'ID si nous ne l'avons pas créé dans cette méthode
+            // Le nettoyage est géré par l'aspect
         }
     }
-    
+
     /**
      * Traitement séquentiel traditionnel (comportement d'origine)
      */
@@ -231,7 +250,7 @@ public class ApiCallRunner implements CommandLineRunner, ExitCodeGenerator {
         }
         return text.substring(0, maxLength) + "...";
     }
-    
+
     @Override
     public int getExitCode() {
         return exitCode;

@@ -1,6 +1,7 @@
 package com.etljobs.sql2json2api.util.correlation;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.slf4j.MDC;
 
@@ -66,5 +67,43 @@ public class CorrelationContext {
      */
     public static String generateId() {
         return CORRELATION_ID_PREFIX + UUID.randomUUID().toString().substring(0, 8);
+    }
+    
+    /**
+     * Exécute une action avec un ID de corrélation garanti.
+     * Si un ID existe déjà, il sera utilisé, sinon un nouveau sera créé.
+     * 
+     * @param <T> Type de retour de l'action
+     * @param action Action à exécuter
+     * @return Résultat de l'action
+     */
+    public static <T> T withCorrelationId(Supplier<T> action) {
+        String existingId = getId();
+        boolean created = false;
+        
+        if (existingId == null) {
+            setId();
+            created = true;
+        }
+        
+        try {
+            return action.get();
+        } finally {
+            if (created) {
+                clear();
+            }
+        }
+    }
+    
+    /**
+     * Exécute une action sans retour avec un ID de corrélation garanti.
+     * 
+     * @param action Action à exécuter
+     */
+    public static void withCorrelationId(Runnable action) {
+        withCorrelationId(() -> {
+            action.run();
+            return null;
+        });
     }
 }
