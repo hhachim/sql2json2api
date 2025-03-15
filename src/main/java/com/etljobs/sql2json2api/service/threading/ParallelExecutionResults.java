@@ -60,8 +60,8 @@ public class ParallelExecutionResults<T> {
             try {
                 // Log de progression
                 if (i % 5 == 0 || i == futures.size() - 1) {
-                    log.debug("Traitement de la future {}/{} (correlationId: {})", 
-                            i+1, futures.size(), correlationId);
+                    log.debug("[{}] Traitement de la future {}/{}", 
+                            correlationId, i+1, futures.size());
                 }
                 
                 T result = future.get(timeoutSeconds, TimeUnit.SECONDS);
@@ -77,25 +77,25 @@ public class ParallelExecutionResults<T> {
                 timeoutCount++;
                 errors.add(new ExecutionError(i, correlationId, "Timeout après " + timeoutSeconds + "s", e));
                 future.cancel(true);
-                log.warn("Timeout pour la tâche #{} (correlationId: {})", i, correlationId);
+                log.warn("[{}] Timeout pour la tâche #{}", correlationId, i);
                 
             } catch (InterruptedException e) {
                 errorCount++;
                 errors.add(new ExecutionError(i, correlationId, "Interruption de la tâche", e));
                 Thread.currentThread().interrupt();
-                log.warn("Tâche #{} interrompue (correlationId: {})", i, correlationId);
+                log.warn("[{}] Tâche #{} interrompue", correlationId, i);
                 
             } catch (ExecutionException e) {
                 errorCount++;
                 String errorMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
                 errors.add(new ExecutionError(i, correlationId, "Erreur d'exécution: " + errorMsg, e.getCause()));
-                log.warn("Erreur dans la tâche #{} (correlationId: {}): {}", i, correlationId, errorMsg);
+                log.warn("[{}] Erreur dans la tâche #{}: {}", correlationId, i, errorMsg);
                 
             } catch (Exception e) {
                 // Capturer toute autre exception non prévue
                 errorCount++;
                 errors.add(new ExecutionError(i, correlationId, "Exception inattendue: " + e.getMessage(), e));
-                log.error("Exception inattendue dans la tâche #{} (correlationId: {}): {}", i, correlationId, e.getMessage(), e);
+                log.error("[{}] Exception inattendue dans la tâche #{}: {}", correlationId, i, e.getMessage(), e);
             }
         }
         

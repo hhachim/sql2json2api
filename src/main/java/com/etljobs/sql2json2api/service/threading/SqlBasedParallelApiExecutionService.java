@@ -167,14 +167,16 @@ public class SqlBasedParallelApiExecutionService {
             // Afficher les réponses en détail
             for (int i = 0; i < responses.size(); i++) {
                 ApiResponse response = responses.get(i);
-                log.info("Réponse {}/{} - Statut: {}, Temps: {}ms", 
-                        i+1, responses.size(), response.getStatusCode(), 
+                String correlationId = response.getRequestId();
+                
+                log.info("[{}] Réponse {}/{} - Statut: {}, Temps: {}ms", 
+                        correlationId, i+1, responses.size(), response.getStatusCode(), 
                         response.getExecutionTimeMs());
                 
                 // Afficher le corps de la réponse
                 if (response.getBody() != null) {
                     String truncatedBody = truncateIfNeeded(response.getBody(), 500);
-                    log.info("Corps: {}", truncatedBody);
+                    log.info("[{}] Corps: {}", correlationId, truncatedBody);
                 }
             }
             

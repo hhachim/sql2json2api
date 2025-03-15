@@ -135,6 +135,7 @@ public class SqlFileSequentialCoordinator {
         for (int i = 0; i < responses.size(); i++) {
             ApiResponse response = responses.get(i);
             boolean isSuccess = response.isSuccess();
+            String correlationId = response.getRequestId();
     
             if (isSuccess) {
                 successCount++;
@@ -142,21 +143,21 @@ public class SqlFileSequentialCoordinator {
                 errorCount++;
             }
     
-            // Log plus détaillé incluant l'URL et l'ID de corrélation
-            log.info("  Réponse {}/{} - Statut: {} - URL: {} - CorrelationId: {}",
-                    i + 1, responses.size(), response.getStatusCode(),
-                    response.getRequestUrl(), response.getRequestId());
+            // Inclure l'ID de corrélation au début de chaque message pour cette réponse
+            log.info("[{}] Réponse {}/{} - Statut: {} - URL: {}",
+                    correlationId, i + 1, responses.size(), response.getStatusCode(),
+                    response.getRequestUrl());
     
             // Afficher un extrait du corps de la réponse (tronqué si trop long)
             String body = response.getBody();
             if (body != null) {
                 if (body.length() > 500) {
-                    log.info("  Corps: {}...", body.substring(0, 500));
+                    log.info("[{}] Corps: {}...", correlationId, body.substring(0, 500));
                 } else {
-                    log.info("  Corps: {}", body);
+                    log.info("[{}] Corps: {}", correlationId, body);
                 }
             } else {
-                log.info("  Corps: <vide>");
+                log.info("[{}] Corps: <vide>", correlationId);
             }
         }
     
