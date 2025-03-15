@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.etljobs.sql2json2api.config.ThreadingConfig;
+import com.etljobs.sql2json2api.util.correlation.CorrelationContext;
+import com.etljobs.sql2json2api.util.correlation.CorrelationPropagator;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -62,7 +64,9 @@ public class ThreadPoolManager implements DisposableBean {
      * @return Future représentant le résultat de la tâche
      */
     public <T> Future<T> submitTask(Callable<T> task) {
-        return executorService.submit(task);
+        // Envelopper la tâche pour propager l'ID de corrélation
+        Callable<T> wrappedTask = CorrelationPropagator.wrap(task);
+        return executorService.submit(wrappedTask);
     }
     
     /**
@@ -82,7 +86,10 @@ public class ThreadPoolManager implements DisposableBean {
                     Thread.sleep(config.getSubmissionDelayMs());
                 }
                 
-                futures.add(executorService.submit(task));
+                // Envelopper la tâche pour propager l'ID de corrélation
+                Callable<T> wrappedTask = CorrelationPropagator.wrap(task);
+                futures.add(executorService.submit(wrappedTask));
+                
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.warn("Interruption lors de la soumission des tâches", e);
@@ -92,6 +99,8 @@ public class ThreadPoolManager implements DisposableBean {
         
         return futures;
     }
+    
+    // Aucun changement pour le reste de la classe
     
     public void shutdown() {
         log.info("Arrêt manuel du pool de threads");
