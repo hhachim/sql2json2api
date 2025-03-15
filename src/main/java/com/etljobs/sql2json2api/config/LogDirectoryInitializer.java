@@ -22,13 +22,16 @@ public class LogDirectoryInitializer {
     public void initializeLogDirectory() {
         try {
             Path path = Paths.get(logFilePath);
+            System.out.println("Tentative de création du répertoire de logs: " + path.toAbsolutePath());
             if (!Files.exists(path)) {
-                log.info("Création du répertoire de logs: {}", logFilePath);
+                log.info("Création du répertoire de logs: {}", path.toAbsolutePath());
                 Files.createDirectories(path);
             } else {
-                log.debug("Le répertoire de logs existe déjà: {}", logFilePath);
+                log.debug("Le répertoire de logs existe déjà: {}", path.toAbsolutePath());
             }
+            System.out.println("Le répertoire de logs est configuré: " + path.toAbsolutePath());
         } catch (Exception e) {
+            System.err.println("Erreur lors de la création du répertoire de logs: " + e.getMessage());
             log.warn("Impossible de créer le répertoire de logs {}: {}", logFilePath, e.getMessage());
         }
     }
