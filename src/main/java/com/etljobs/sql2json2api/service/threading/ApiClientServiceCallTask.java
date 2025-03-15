@@ -6,6 +6,7 @@ import org.springframework.http.HttpMethod;
 
 import com.etljobs.sql2json2api.api.response.ApiResponse;
 import com.etljobs.sql2json2api.service.http.ApiClientService;
+import com.etljobs.sql2json2api.util.correlation.CorrelationContext;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -39,30 +40,56 @@ public class ApiClientServiceCallTask extends ApiCallTask {
     
     @Override
     protected ApiResponse executeApiCall() throws Exception {
-        long startTime = System.currentTimeMillis();
-        log.debug("Délégation de l'appel API à ApiClientService: {} {}", getMethod(), getUrl());
+        // Récupérer un éventuel ID de corrélation parent
+        String parentCorrelationId = CorrelationContext.getId();
         
-        // Utiliser le service existant pour effectuer l'appel
-        com.etljobs.sql2json2api.model.ApiResponse legacyResponse = 
-                apiClientService.callApi(getUrl(), getMethod(), getPayload(), getHeaders(), getUrlParams());
+        // Créer un nouvel ID de corrélation pour cette tâche
+        String correlationId = CorrelationContext.setId();
+        log.debug("Nouvel ID de corrélation créé pour la tâche thread #{}: {} (parent: {})", 
+                getRowIndex(), correlationId, parentCorrelationId);
         
-        long executionTime = System.currentTimeMillis() - startTime;
-        
-        // Logguer la réponse pour débogage
-        if (legacyResponse != null) {
-            log.debug("Réponse API reçue: statut={}, taille corps={}", 
-                    legacyResponse.getStatusCode(), 
-                    (legacyResponse.getBody() != null ? legacyResponse.getBody().length() : 0));
+        try {
+            long startTime = System.currentTimeMillis();
+            log.debug("Délégation de l'appel API à ApiClientService: {} {}", getMethod(), getUrl());
             
-            if (legacyResponse.getBody() != null && legacyResponse.getBody().length() < 1000) {
-                log.debug("Corps de la réponse: {}", legacyResponse.getBody());
+            // Utiliser le service existant pour effectuer l'appel
+            com.etljobs.sql2json2api.model.ApiResponse legacyResponse = 
+                    apiClientService.callApi(getUrl(), getMethod(), getPayload(), getHeaders(), getUrlParams());
+            
+            long executionTime = System.currentTimeMillis() - startTime;
+            
+            // Logguer la réponse pour débogage
+            if (legacyResponse != null) {
+                log.debug("Réponse API reçue: statut={}, taille corps={}", 
+                        legacyResponse.getStatusCode(), 
+                        (legacyResponse.getBody() != null ? legacyResponse.getBody().length() : 0));
+                
+                if (legacyResponse.getBody() != null && legacyResponse.getBody().length() < 1000) {
+                    log.debug("Corps de la réponse: {}", legacyResponse.getBody());
+                }
+            } else {
+                log.warn("Réponse API nulle reçue");
             }
-        } else {
-            log.warn("Réponse API nulle reçue");
+            
+            // Convertir la réponse legacy au nouveau format ApiResponse
+            ApiResponse response = convertToApiResponse(legacyResponse, executionTime);
+            
+            // Ajouter l'ID de corrélation à la réponse
+            response.setRequestId(correlationId);
+            
+            return response;
+        } finally {
+            // Nettoyer l'ID de corrélation de cette tâche
+            CorrelationContext.clear();
+            
+            // Restaurer l'ID de corrélation parent s'il existait
+            if (parentCorrelationId != null) {
+                CorrelationContext.setId(parentCorrelationId);
+            }
+            
+            log.debug("ID de corrélation nettoyé après l'exécution de la tâche thread #{}",
+                    getRowIndex());
         }
-        
-        // Convertir la réponse legacy au nouveau format ApiResponse
-        return convertToApiResponse(legacyResponse, executionTime);
     }
     
     /**

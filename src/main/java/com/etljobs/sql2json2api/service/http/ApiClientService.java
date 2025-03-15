@@ -13,6 +13,7 @@ import com.etljobs.sql2json2api.api.response.ApiResponse;
 import com.etljobs.sql2json2api.api.response.ApiResponseAdapter;
 import com.etljobs.sql2json2api.exception.ApiCallException;
 import com.etljobs.sql2json2api.model.ApiTemplateResult;
+import com.etljobs.sql2json2api.util.correlation.CorrelationContext;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -56,6 +57,17 @@ public class ApiClientService {
      */
     public com.etljobs.sql2json2api.model.ApiResponse callApi(String route, HttpMethod method, String payload, 
                               Map<String, String> headers, Map<String, Object> urlParams) {
+        
+        // Récupérer l'ID de corrélation existant ou créer un nouvel ID
+        String correlationId = CorrelationContext.getId();
+        boolean newCorrelationId = false;
+        
+        if (correlationId == null) {
+            correlationId = CorrelationContext.setId();
+            newCorrelationId = true;
+            log.debug("Nouvel ID de corrélation créé pour callApi: {}", correlationId);
+        }
+        
         try {
             log.debug("Préparation de l'appel API {} {}", method, route);
             
@@ -66,6 +78,7 @@ public class ApiClientService {
                     .payload(payload)
                     .headers(headers)
                     .urlParams(urlParams)
+                    .requestId(correlationId)  // Utiliser l'ID de corrélation comme requestId
                     .build();
             
             // Exécuter l'appel via l'executor
@@ -77,6 +90,12 @@ public class ApiClientService {
         } catch (Exception e) {
             log.error("Erreur lors de l'appel API", e);
             throw new ApiCallException("Échec de l'appel API: " + e.getMessage(), e);
+        } finally {
+            // Nettoyer l'ID de corrélation uniquement si nous l'avons créé dans cette méthode
+            if (newCorrelationId) {
+                CorrelationContext.clear();
+                log.debug("ID de corrélation nettoyé après callApi: {}", correlationId);
+            }
         }
     }
     
@@ -94,19 +113,40 @@ public class ApiClientService {
      * @return Réponse de l'API au format legacy
      */
     public com.etljobs.sql2json2api.model.ApiResponse callApiFromTemplate(ApiTemplateResult templateResult) {
-        if (templateResult == null || templateResult.getEndpointInfo() == null) {
-            throw new IllegalArgumentException("Le résultat du template est invalide");
+        // Récupérer l'ID de corrélation existant ou créer un nouvel ID
+        String correlationId = CorrelationContext.getId();
+        boolean newCorrelationId = false;
+        
+        if (correlationId == null) {
+            correlationId = CorrelationContext.setId();
+            newCorrelationId = true;
+            log.debug("Nouvel ID de corrélation créé pour callApiFromTemplate: {}", correlationId);
         }
         
-        // Créer la requête depuis le résultat du template
-        ApiRequest request = requestFactory.createFromTemplateResult(
-                templateResult, tokenService.getToken());
-        
-        // Exécuter l'appel via l'executor
-        ApiResponse response = apiCallExecutor.execute(request);
-        
-        // Convertir au format legacy
-        return responseAdapter.toLegacy(response);
+        try {
+            if (templateResult == null || templateResult.getEndpointInfo() == null) {
+                throw new IllegalArgumentException("Le résultat du template est invalide");
+            }
+            
+            // Créer la requête depuis le résultat du template
+            ApiRequest request = requestFactory.createFromTemplateResult(
+                    templateResult, tokenService.getToken());
+            
+            // Ajouter l'ID de corrélation à la requête
+            request.setRequestId(correlationId);
+            
+            // Exécuter l'appel via l'executor
+            ApiResponse response = apiCallExecutor.execute(request);
+            
+            // Convertir au format legacy
+            return responseAdapter.toLegacy(response);
+        } finally {
+            // Nettoyer l'ID de corrélation uniquement si nous l'avons créé dans cette méthode
+            if (newCorrelationId) {
+                CorrelationContext.clear();
+                log.debug("ID de corrélation nettoyé après callApiFromTemplate: {}", correlationId);
+            }
+        }
     }
     
     /**
@@ -121,23 +161,43 @@ public class ApiClientService {
      */
     public com.etljobs.sql2json2api.model.ApiResponse retryWithNewToken(String route, HttpMethod method, String payload, 
                                       Map<String, String> headers, Map<String, Object> urlParams) {
-        log.debug("Réessai de l'appel API avec un nouveau token");
         
-        // Créer la requête avec le flag refreshToken
-        ApiRequest request = ApiRequestBuilder.create()
-                .url(route)
-                .method(method)
-                .payload(payload)
-                .headers(headers)
-                .urlParams(urlParams)
-                .refreshToken()
-                .build();
+        // Récupérer l'ID de corrélation existant ou créer un nouvel ID
+        String correlationId = CorrelationContext.getId();
+        boolean newCorrelationId = false;
         
-        // Exécuter l'appel
-        ApiResponse response = apiCallExecutor.execute(request);
+        if (correlationId == null) {
+            correlationId = CorrelationContext.setId();
+            newCorrelationId = true;
+            log.debug("Nouvel ID de corrélation créé pour retryWithNewToken: {}", correlationId);
+        }
         
-        // Convertir au format legacy
-        return responseAdapter.toLegacy(response);
+        try {
+            log.debug("Réessai de l'appel API avec un nouveau token");
+            
+            // Créer la requête avec le flag refreshToken
+            ApiRequest request = ApiRequestBuilder.create()
+                    .url(route)
+                    .method(method)
+                    .payload(payload)
+                    .headers(headers)
+                    .urlParams(urlParams)
+                    .requestId(correlationId)  // Utiliser l'ID de corrélation comme requestId
+                    .refreshToken()
+                    .build();
+            
+            // Exécuter l'appel
+            ApiResponse response = apiCallExecutor.execute(request);
+            
+            // Convertir au format legacy
+            return responseAdapter.toLegacy(response);
+        } finally {
+            // Nettoyer l'ID de corrélation uniquement si nous l'avons créé dans cette méthode
+            if (newCorrelationId) {
+                CorrelationContext.clear();
+                log.debug("ID de corrélation nettoyé après retryWithNewToken: {}", correlationId);
+            }
+        }
     }
     
     /**
@@ -156,25 +216,44 @@ public class ApiClientService {
                                    Map<String, String> headers, Map<String, Object> urlParams,
                                    int maxRetries, boolean refreshTokenOnRetry) {
         
-        // Créer la requête
-        ApiRequest request = ApiRequestBuilder.create()
-                .url(route)
-                .method(method)
-                .payload(payload)
-                .headers(headers)
-                .urlParams(urlParams)
-                .build();
+        // Récupérer l'ID de corrélation existant ou créer un nouvel ID
+        String correlationId = CorrelationContext.getId();
+        boolean newCorrelationId = false;
         
-        // Préparer le callback pour le rafraîchissement du token
-        Runnable retryCallback = refreshTokenOnRetry ? 
-                () -> request.setAuthToken(tokenService.refreshToken()) : null;
+        if (correlationId == null) {
+            correlationId = CorrelationContext.setId();
+            newCorrelationId = true;
+            log.debug("Nouvel ID de corrélation créé pour callApiWithRetry: {}", correlationId);
+        }
         
-        // Exécuter avec réessai
-        ApiResponse response = apiCallExecutor.executeWithRetry(
-                request, retryCallback, maxRetries, DEFAULT_RETRY_DELAY_MS);
-        
-        // Convertir au format legacy
-        return responseAdapter.toLegacy(response);
+        try {
+            // Créer la requête
+            ApiRequest request = ApiRequestBuilder.create()
+                    .url(route)
+                    .method(method)
+                    .payload(payload)
+                    .headers(headers)
+                    .urlParams(urlParams)
+                    .requestId(correlationId)  // Utiliser l'ID de corrélation comme requestId
+                    .build();
+            
+            // Préparer le callback pour le rafraîchissement du token
+            Runnable retryCallback = refreshTokenOnRetry ? 
+                    () -> request.setAuthToken(tokenService.refreshToken()) : null;
+            
+            // Exécuter avec réessai
+            ApiResponse response = apiCallExecutor.executeWithRetry(
+                    request, retryCallback, maxRetries, DEFAULT_RETRY_DELAY_MS);
+            
+            // Convertir au format legacy
+            return responseAdapter.toLegacy(response);
+        } finally {
+            // Nettoyer l'ID de corrélation uniquement si nous l'avons créé dans cette méthode
+            if (newCorrelationId) {
+                CorrelationContext.clear();
+                log.debug("ID de corrélation nettoyé après callApiWithRetry: {}", correlationId);
+            }
+        }
     }
     
     /**

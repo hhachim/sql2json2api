@@ -15,6 +15,7 @@ import com.etljobs.sql2json2api.api.response.ApiResponseFactory;
 import com.etljobs.sql2json2api.config.ApiConfig;
 import com.etljobs.sql2json2api.exception.ApiCallException;
 import com.etljobs.sql2json2api.service.http.TokenService;
+import com.etljobs.sql2json2api.util.correlation.CorrelationContext;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -61,6 +62,18 @@ public class ApiCallExecutor {
             throw new IllegalArgumentException("La requête ne peut pas être nulle");
         }
 
+        // Récupérer l'ID de corrélation existant ou en créer un nouveau
+        String correlationId = CorrelationContext.getId();
+        boolean newCorrelationId = false;
+        
+        if (correlationId == null) {
+            correlationId = CorrelationContext.setId();
+            newCorrelationId = true;
+            log.debug("Nouvel ID de corrélation créé pour l'appel API: {}", correlationId);
+        } else {
+            log.debug("Utilisation de l'ID de corrélation existant: {}", correlationId);
+        }
+
         log.debug("Exécution de la requête API: {}", request.toLogString());
 
         // Moment de début de l'exécution
@@ -88,19 +101,39 @@ public class ApiCallExecutor {
             log.debug("Appel API réussi en {}ms: {} {}", executionTime, request.getMethod(), url);
 
             // 7. Créer et retourner la réponse
-            return responseFactory.fromResponseEntity(response, request, executionTime, 1);
+            ApiResponse apiResponse = responseFactory.fromResponseEntity(response, request, executionTime, 1);
+            
+            // Ajouter l'ID de corrélation à la réponse
+            if (request.getRequestId() == null) {
+                apiResponse.setRequestId(correlationId);
+            }
+            
+            return apiResponse;
 
         } catch (HttpStatusCodeException e) {
             // Gérer les erreurs HTTP (4xx, 5xx)
             long executionTime = System.currentTimeMillis() - startTime;
             log.error("Erreur HTTP {} lors de l'appel API: {}", e.getStatusCode(), e.getMessage());
-            return responseFactory.fromHttpException(e, request, executionTime, 1);
+            
+            ApiResponse errorResponse = responseFactory.fromHttpException(e, request, executionTime, 1);
+            // Ajouter l'ID de corrélation à la réponse d'erreur
+            if (request.getRequestId() == null) {
+                errorResponse.setRequestId(correlationId);
+            }
+            
+            return errorResponse;
 
         } catch (Exception e) {
             // Gérer les autres exceptions
             long executionTime = System.currentTimeMillis() - startTime;
             log.error("Erreur lors de l'appel API: {}", e.getMessage());
             throw new ApiCallException("Échec de l'exécution de la requête API: " + e.getMessage(), e);
+        } finally {
+            // Nettoyer l'ID de corrélation uniquement si nous l'avons créé dans cette méthode
+            if (newCorrelationId) {
+                CorrelationContext.clear();
+                log.debug("ID de corrélation nettoyé après l'appel API: {}", correlationId);
+            }
         }
     }
 
@@ -173,6 +206,12 @@ public class ApiCallExecutor {
         if (request.getHeaders() != null && !request.getHeaders().isEmpty()) {
             request.getHeaders().forEach(httpHeaders::set);
         }
+        
+        // Ajouter l'ID de corrélation comme en-tête pour le suivi côté API
+        String correlationId = CorrelationContext.getId();
+        if (correlationId != null) {
+            httpHeaders.set("X-Correlation-ID", correlationId);
+        }
 
         return httpHeaders;
     }
@@ -205,45 +244,70 @@ public class ApiCallExecutor {
      */
     public ApiResponse executeWithStrategy(ApiRequest request, ApiCallStrategy strategy,
             Runnable retryCallback, int maxRetries, long retryDelayMs) {
-        ApiResponse response = null;
-        ApiRequest currentRequest = request;
-        int attempts = 0;
-
-        do {
-            attempts++;
-            if (attempts > 1) {
-                log.info("Tentative {} sur {}", attempts, maxRetries + 1);
-
-                // Préparer la requête pour le réessai selon la stratégie
-                currentRequest = strategy.prepareForRetry(request, response, attempts);
-
-                // Exécuter le callback si fourni
-                if (retryCallback != null) {
-                    retryCallback.run();
-                }
-
-                // Attendre avant le réessai
-                try {
-                    Thread.sleep(retryDelayMs);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new ApiCallException("Interruption pendant l'attente avant réessai", e);
-                }
-            }
-
-            // Exécuter la requête
-            response = execute(currentRequest);
-
-        } while (attempts < maxRetries && strategy.shouldRetry(response));
-
-        if (response.isSuccess()) {
-            if (attempts > 1) {
-                log.info("Succès après {} tentatives", attempts);
-            }
+        // Récupérer ou créer l'ID de corrélation
+        String correlationId = CorrelationContext.getId();
+        boolean newCorrelationId = false;
+        
+        if (correlationId == null) {
+            correlationId = CorrelationContext.setId();
+            newCorrelationId = true;
+            log.debug("Nouvel ID de corrélation créé pour l'appel API avec réessai: {}", correlationId);
         } else {
-            log.warn("Échec après {} tentatives", attempts);
+            log.debug("Utilisation de l'ID de corrélation existant pour réessai: {}", correlationId);
         }
+        
+        try {
+            ApiResponse response = null;
+            ApiRequest currentRequest = request;
+            int attempts = 0;
 
-        return response;
+            do {
+                attempts++;
+                if (attempts > 1) {
+                    log.info("Tentative {} sur {}", attempts, maxRetries + 1);
+
+                    // Préparer la requête pour le réessai selon la stratégie
+                    currentRequest = strategy.prepareForRetry(request, response, attempts);
+
+                    // Exécuter le callback si fourni
+                    if (retryCallback != null) {
+                        retryCallback.run();
+                    }
+
+                    // Attendre avant le réessai
+                    try {
+                        Thread.sleep(retryDelayMs);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new ApiCallException("Interruption pendant l'attente avant réessai", e);
+                    }
+                }
+
+                // Exécuter la requête
+                response = execute(currentRequest);
+
+            } while (attempts < maxRetries && strategy.shouldRetry(response));
+
+            if (response.isSuccess()) {
+                if (attempts > 1) {
+                    log.info("Succès après {} tentatives", attempts);
+                }
+            } else {
+                log.warn("Échec après {} tentatives", attempts);
+            }
+            
+            // S'assurer que l'ID de corrélation est présent dans la réponse
+            if (response.getRequestId() == null) {
+                response.setRequestId(correlationId);
+            }
+
+            return response;
+        } finally {
+            // Nettoyer l'ID de corrélation uniquement si nous l'avons créé
+            if (newCorrelationId) {
+                CorrelationContext.clear();
+                log.debug("ID de corrélation nettoyé après l'appel API avec réessai: {}", correlationId);
+            }
+        }
     }
 }
