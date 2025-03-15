@@ -55,3 +55,10 @@ logging:
     root: INFO
     com.etljobs.sql2json2api: DEBUG
     org.springframework.jdbc.core: DEBUG
+  file:
+    path: ./logs
+    name: sql2json2api
+    max-history: 7
+    max-size: 10MB
+  console:
+    enabled: true

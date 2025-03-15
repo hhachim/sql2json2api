@@ -3,12 +3,37 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
+    <!-- Propriétés configurables via application.yml -->
+    <springProperty scope="context" name="LOG_FILE_PATH" source="logging.file.path" defaultValue="./logs"/>
+    <springProperty scope="context" name="LOG_FILE_NAME" source="logging.file.name" defaultValue="sql2json2api"/>
+
     <!-- Format de log pour inclure l'ID de corrélation de manière distincte -->
     <property name="CONSOLE_LOG_PATTERN" 
         value="%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr([%X{correlationId:-}]){magenta} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+    
+    <!-- Format pour les logs dans les fichiers (sans les couleurs) -->
+    <property name="FILE_LOG_PATTERN" 
+        value="%d{yyyy-MM-dd HH:mm:ss.SSS} ${LOG_LEVEL_PATTERN:-%5p} [%15.15t] %-40.40logger{39} [%X{correlationId:-}] : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
 
+    <!-- Configuration de l'appender pour les fichiers de log -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE_PATH}/${LOG_FILE_NAME}.log</file>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_FILE_PATH}/${LOG_FILE_NAME}-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Configuration racine (par défaut) -->
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
     </root>
 
     <!-- Respecter les niveaux de log définis dans application.yml -->

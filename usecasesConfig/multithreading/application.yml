@@ -57,3 +57,10 @@ logging:
     root: DEBUG  # Options: TRACE, DEBUG, INFO, WARN, ERROR, FATAL, OFF
     com.etljobs.sql2json2api: DEBUG  # Niveau de log spécifique pour les classes de l'application
     org.springframework.jdbc.core: DEBUG  # Niveau de log spécifique pour les opérations JDBC
+  file:
+    path: ./logs
+    name: sql2json2api
+    max-history: 7
+    max-size: 10MB
+  console:
+    enabled: false
