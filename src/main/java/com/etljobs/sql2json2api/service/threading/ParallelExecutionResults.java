@@ -38,10 +38,11 @@ public class ParallelExecutionResults<T> {
      * Attend la complétion de toutes les tâches et collecte les résultats.
      * 
      * @param futures Liste des futures à attendre
+     * @param tasks Liste des tâches correspondantes (pour récupérer les IDs de corrélation)
      * @param timeoutSeconds Timeout en secondes pour chaque future
      * @return Liste des résultats obtenus avec succès
      */
-    public List<T> waitForAll(List<Future<T>> futures, int timeoutSeconds) {
+    public List<T> waitForAll(List<Future<T>> futures, List<ApiCallTask> tasks, int timeoutSeconds) {
         completedCount = 0;
         timeoutCount = 0;
         errorCount = 0;
@@ -53,10 +54,14 @@ public class ParallelExecutionResults<T> {
         
         for (int i = 0; i < futures.size(); i++) {
             Future<T> future = futures.get(i);
+            ApiCallTask task = (i < tasks.size()) ? tasks.get(i) : null;
+            String correlationId = (task != null) ? task.getCorrelationId() : "unknown";
+            
             try {
                 // Log de progression
                 if (i % 5 == 0 || i == futures.size() - 1) {
-                    log.debug("Traitement de la future {}/{}", i+1, futures.size());
+                    log.debug("Traitement de la future {}/{} (correlationId: {})", 
+                            i+1, futures.size(), correlationId);
                 }
                 
                 T result = future.get(timeoutSeconds, TimeUnit.SECONDS);
@@ -70,27 +75,27 @@ public class ParallelExecutionResults<T> {
                 
             } catch (TimeoutException e) {
                 timeoutCount++;
-                errors.add(new ExecutionError(i, "Timeout après " + timeoutSeconds + "s", e));
+                errors.add(new ExecutionError(i, correlationId, "Timeout après " + timeoutSeconds + "s", e));
                 future.cancel(true);
-                log.warn("Timeout pour la tâche #{}", i);
+                log.warn("Timeout pour la tâche #{} (correlationId: {})", i, correlationId);
                 
             } catch (InterruptedException e) {
                 errorCount++;
-                errors.add(new ExecutionError(i, "Interruption de la tâche", e));
+                errors.add(new ExecutionError(i, correlationId, "Interruption de la tâche", e));
                 Thread.currentThread().interrupt();
-                log.warn("Tâche #{} interrompue", i);
+                log.warn("Tâche #{} interrompue (correlationId: {})", i, correlationId);
                 
             } catch (ExecutionException e) {
                 errorCount++;
                 String errorMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
-                errors.add(new ExecutionError(i, "Erreur d'exécution: " + errorMsg, e.getCause()));
-                log.warn("Erreur dans la tâche #{}: {}", i, errorMsg);
+                errors.add(new ExecutionError(i, correlationId, "Erreur d'exécution: " + errorMsg, e.getCause()));
+                log.warn("Erreur dans la tâche #{} (correlationId: {}): {}", i, correlationId, errorMsg);
                 
             } catch (Exception e) {
                 // Capturer toute autre exception non prévue
                 errorCount++;
-                errors.add(new ExecutionError(i, "Exception inattendue: " + e.getMessage(), e));
-                log.error("Exception inattendue dans la tâche #{}: {}", i, e.getMessage(), e);
+                errors.add(new ExecutionError(i, correlationId, "Exception inattendue: " + e.getMessage(), e));
+                log.error("Exception inattendue dans la tâche #{} (correlationId: {}): {}", i, correlationId, e.getMessage(), e);
             }
         }
         
@@ -107,11 +112,13 @@ public class ParallelExecutionResults<T> {
     @Getter
     public static class ExecutionError {
         private final int taskIndex;
+        private final String correlationId;
         private final String message;
         private final Throwable cause;
         
-        public ExecutionError(int taskIndex, String message, Throwable cause) {
+        public ExecutionError(int taskIndex, String correlationId, String message, Throwable cause) {
             this.taskIndex = taskIndex;
+            this.correlationId = correlationId;
             this.message = message;
             this.cause = cause;
         }

@@ -6,7 +6,6 @@ import org.springframework.http.HttpMethod;
 
 import com.etljobs.sql2json2api.api.response.ApiResponse;
 import com.etljobs.sql2json2api.service.http.ApiClientService;
-import com.etljobs.sql2json2api.util.correlation.CorrelationContext;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,17 +39,11 @@ public class ApiClientServiceCallTask extends ApiCallTask {
     
     @Override
     protected ApiResponse executeApiCall() throws Exception {
-        // Récupérer un éventuel ID de corrélation parent
-        String parentCorrelationId = CorrelationContext.getId();
-        
-        // Créer un nouvel ID de corrélation pour cette tâche
-        String correlationId = CorrelationContext.setId();
-        log.debug("Nouvel ID de corrélation créé pour la tâche thread #{}: {} (parent: {})", 
-                getRowIndex(), correlationId, parentCorrelationId);
+        log.debug("Délégation de l'appel API à ApiClientService: {} {} (correlationId: {})", 
+                getMethod(), getUrl(), correlationId);
         
         try {
             long startTime = System.currentTimeMillis();
-            log.debug("Délégation de l'appel API à ApiClientService: {} {}", getMethod(), getUrl());
             
             // Utiliser le service existant pour effectuer l'appel
             com.etljobs.sql2json2api.model.ApiResponse legacyResponse = 
@@ -60,15 +53,16 @@ public class ApiClientServiceCallTask extends ApiCallTask {
             
             // Logguer la réponse pour débogage
             if (legacyResponse != null) {
-                log.debug("Réponse API reçue: statut={}, taille corps={}", 
+                log.debug("Réponse API reçue: statut={}, taille corps={} (correlationId: {})", 
                         legacyResponse.getStatusCode(), 
-                        (legacyResponse.getBody() != null ? legacyResponse.getBody().length() : 0));
+                        (legacyResponse.getBody() != null ? legacyResponse.getBody().length() : 0),
+                        correlationId);
                 
                 if (legacyResponse.getBody() != null && legacyResponse.getBody().length() < 1000) {
-                    log.debug("Corps de la réponse: {}", legacyResponse.getBody());
+                    log.debug("Corps de la réponse (correlationId: {}): {}", correlationId, legacyResponse.getBody());
                 }
             } else {
-                log.warn("Réponse API nulle reçue");
+                log.warn("Réponse API nulle reçue (correlationId: {})", correlationId);
             }
             
             // Convertir la réponse legacy au nouveau format ApiResponse
@@ -78,17 +72,10 @@ public class ApiClientServiceCallTask extends ApiCallTask {
             response.setRequestId(correlationId);
             
             return response;
-        } finally {
-            // Nettoyer l'ID de corrélation de cette tâche
-            CorrelationContext.clear();
-            
-            // Restaurer l'ID de corrélation parent s'il existait
-            if (parentCorrelationId != null) {
-                CorrelationContext.setId(parentCorrelationId);
-            }
-            
-            log.debug("ID de corrélation nettoyé après l'exécution de la tâche thread #{}",
-                    getRowIndex());
+        } catch (Exception e) {
+            log.error("Erreur lors de l'appel API à ApiClientService (correlationId: {}): {}", 
+                    correlationId, e.getMessage());
+            throw e;
         }
     }
     
@@ -101,7 +88,7 @@ public class ApiClientServiceCallTask extends ApiCallTask {
                     .statusCode(500)
                     .body("Réponse nulle reçue du service API")
                     .requestUrl(getUrl())
-                    .requestId(getRowIdentifier())
+                    .requestId(correlationId)
                     .attemptNumber(1)
                     .executionTimeMs(executionTime)
                     .build();
@@ -111,7 +98,7 @@ public class ApiClientServiceCallTask extends ApiCallTask {
                 .statusCode(legacyResponse.getStatusCode())
                 .body(legacyResponse.getBody())
                 .requestUrl(getUrl())
-                .requestId(getRowIdentifier())
+                .requestId(correlationId)
                 .attemptNumber(1)
                 .executionTimeMs(executionTime)
                 .build();

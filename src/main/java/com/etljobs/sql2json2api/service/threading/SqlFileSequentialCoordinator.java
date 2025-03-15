@@ -127,26 +127,26 @@ public class SqlFileSequentialCoordinator {
             log.info("Aucune réponse pour {}", fileName);
             return;
         }
-
+    
         log.info("Détail des {} réponses pour {}:", responses.size(), fileName);
         int successCount = 0;
         int errorCount = 0;
-
+    
         for (int i = 0; i < responses.size(); i++) {
             ApiResponse response = responses.get(i);
             boolean isSuccess = response.isSuccess();
-
+    
             if (isSuccess) {
                 successCount++;
             } else {
                 errorCount++;
             }
-
-            // Log plus détaillé incluant l'URL
-            log.info("  Réponse {}/{} - Statut: {} - URL: {}",
+    
+            // Log plus détaillé incluant l'URL et l'ID de corrélation
+            log.info("  Réponse {}/{} - Statut: {} - URL: {} - CorrelationId: {}",
                     i + 1, responses.size(), response.getStatusCode(),
-                    response.getRequestUrl());
-
+                    response.getRequestUrl(), response.getRequestId());
+    
             // Afficher un extrait du corps de la réponse (tronqué si trop long)
             String body = response.getBody();
             if (body != null) {
@@ -159,7 +159,7 @@ public class SqlFileSequentialCoordinator {
                 log.info("  Corps: <vide>");
             }
         }
-
+    
         log.info("Résumé pour {}: {} succès, {} erreurs", fileName, successCount, errorCount);
     }
 

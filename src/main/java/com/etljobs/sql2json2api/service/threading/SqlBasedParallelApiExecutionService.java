@@ -157,8 +157,9 @@ public class SqlBasedParallelApiExecutionService {
             // Log avant l'attente
             log.info("En attente de la complétion de {} tâches...", futures.size());
             
-            List<ApiResponse> responses = executionResults.waitForAll(futures, threadPoolManager.getTimeoutSeconds());
-            
+            // Passer les tâches en plus des futures pour récupérer les IDs de corrélation
+            List<ApiResponse> responses = executionResults.waitForAll(futures, tasks, threadPoolManager.getTimeoutSeconds());
+
             // Vérifier si des réponses ont été obtenues
             log.info("Réception de {} réponses sur {} attendues", 
                     responses.size(), futures.size());
