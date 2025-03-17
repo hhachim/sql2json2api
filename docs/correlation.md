@@ -1,5 +1,9 @@
 Je vais analyser votre besoin et les documents fournis pour vous proposer une feuille de route adaptée et simplifiée pour l'implémentation des identifiants de corrélation dans votre application.
 
+Le besoin principal est d'implémenter un système d'identifiants de corrélation (correlation IDs) dans votre application Spring Boot pour améliorer la traçabilité entre les requêtes API et leurs réponses. Ces identifiants permettront de suivre le cycle de vie complet d'une requête, particulièrement important dans un environnement multithreadé. 
+
+L'objectif est d'ajouter ces identifiants de manière non intrusive, en s'assurant que chaque requête API reçoit un identifiant unique qui est ensuite propagé à sa réponse correspondante, tout en étant visible dans les logs pour faciliter le débogage et le suivi des transactions.
+
 # Analyse de l'existant
 
 Votre application `sql2json2api` est fonctionnelle et bien structurée. Elle exécute des requêtes SQL, transforme les résultats en JSON, et effectue des appels API pour chaque ligne. Vous avez déjà implémenté:
